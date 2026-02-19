@@ -890,14 +890,16 @@ const AppContent: React.FC = () => {
                     PRJ Bot
                 </button>
 
-                {/* RAG Button */}
-                <button
-                    onClick={() => setIsRagOpen(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
-                >
-                    <Bot className="w-4 h-4" />
-                    RAG
-                </button>
+                {/* RAG Button - Admin only */}
+                {isAdmin && (
+                    <button
+                        onClick={() => setIsRagOpen(true)}
+                        className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+                    >
+                        <Bot className="w-4 h-4" />
+                        RAG
+                    </button>
+                )}
 
                 <div className="h-6 w-px bg-gray-200 dark:bg-gray-700"></div>
 
