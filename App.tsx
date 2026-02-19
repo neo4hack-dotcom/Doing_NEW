@@ -707,9 +707,7 @@ const AppContent: React.FC = () => {
         weeklyReports: newReports,
         notifications: [...(curr.notifications || []), notif].slice(-100)
       };
-    });
-    setAppState(newState);
-  };
+  });
 
   const handleDeleteReport = createHandler((curr, id: string) => ({...curr, weeklyReports: curr.weeklyReports.filter(r => r.id !== id)}));
 
