@@ -54,7 +54,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users,
 
   // Filter admin notifications that haven't been seen
   const unseenNotifications = (notifications || []).filter(n =>
-    n.targetRole === 'admin' && !n.seenBy.includes(currentUserId)
+    n.targetRole === 'admin' && !(n.seenBy || []).includes(currentUserId)
   );
 
   const displayedNotifications = showAllNotifications ? unseenNotifications : unseenNotifications.slice(0, 5);

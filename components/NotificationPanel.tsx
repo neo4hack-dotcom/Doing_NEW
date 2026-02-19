@@ -22,16 +22,16 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
   const userId = currentUser?.id || '';
 
   // Filter notifications relevant to current user
-  const relevantNotifications = notifications.filter(n => {
-    if (n.seenBy.includes(userId)) return false;
+  const relevantNotifications = (notifications || []).filter(n => {
+    if ((n.seenBy || []).includes(userId)) return false;
     if (n.targetRole === 'admin' && isAdmin) return true;
     if (n.targetRole === 'user' && n.targetUserId === userId) return true;
     return false;
   });
 
   // Dynamic notifications (stale project, report overdue) not yet dismissed
-  const relevantDynamic = dynamicNotifications.filter(n => {
-    if (n.seenBy.includes(userId)) return false;
+  const relevantDynamic = (dynamicNotifications || []).filter(n => {
+    if ((n.seenBy || []).includes(userId)) return false;
     if (n.targetRole === 'user' && n.targetUserId === userId) return true;
     return false;
   });

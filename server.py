@@ -42,13 +42,17 @@ def init_db_if_needed():
 
     if not os.path.exists(DB_FILE):
         initial_data = {
-            "users": [{ 
-                "id": "u1", "uid": "Admin", "firstName": "System", "lastName": "Admin", 
-                "functionTitle": "Administrator", "role": "Admin", "password": "admin" 
+            "users": [{
+                "id": "u1", "uid": "Admin", "firstName": "System", "lastName": "Admin",
+                "functionTitle": "Administrator", "role": "Admin", "password": "admin"
             }],
             "teams": [],
             "meetings": [],
             "weeklyReports": [],
+            "workingGroups": [],
+            "notifications": [],
+            "dismissedAlerts": {},
+            "systemMessage": { "active": False, "content": "", "level": "info" },
             "notes": [],
             "lastUpdated": int(time.time() * 1000)
         }
@@ -142,7 +146,9 @@ def update_db_config_path():
             
             initial_data = {
                 "users": [{ "id": "u1", "uid": "Admin", "firstName": "System", "lastName": "Admin", "functionTitle": "Administrator", "role": "Admin", "password": "admin" }],
-                "teams": [], "meetings": [], "weeklyReports": [], "notes": [], "lastUpdated": int(time.time() * 1000)
+                "teams": [], "meetings": [], "weeklyReports": [], "workingGroups": [], "notifications": [],
+                "dismissedAlerts": {}, "systemMessage": { "active": False, "content": "", "level": "info" },
+                "notes": [], "lastUpdated": int(time.time() * 1000)
             }
             with open(DB_FILE, 'w', encoding='utf-8') as f:
                 json.dump(initial_data, f, indent=2)
