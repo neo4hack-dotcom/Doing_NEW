@@ -410,7 +410,7 @@ const MeetingManager: React.FC<MeetingManagerProps> = ({ meetings, teams, users,
                                         value=""
                                     >
                                         <option value="">+ Add Internal User</option>
-                                        {users.filter(u => !editMeeting.attendees.includes(u.id)).map(u => (
+                                        {users.filter(u => !(editMeeting.attendees || []).includes(u.id)).map(u => (
                                             <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
                                         ))}
                                     </select>

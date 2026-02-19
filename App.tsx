@@ -15,7 +15,7 @@ import PRJBotSidebar from './components/PRJBotSidebar';
 import NotificationPanel from './components/NotificationPanel';
 import WorkingGroupModule from './components/WorkingGroup';
 
-import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer, generateId } from './services/storage';
+import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer, generateId, sanitizeAppState } from './services/storage';
 import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage, AppNotification } from './types';
 import { Bell, Sun, Moon, Bot, RefreshCw, Cloud, CloudOff } from 'lucide-react';
 
@@ -94,32 +94,32 @@ const getFilteredState = (state: AppState): AppState => {
     const mySubordinates = getSubordinateIds(myId, state.users);
     const accessibleUserIds = [myId, ...mySubordinates];
 
-    const filteredUsers = state.users.filter(u => accessibleUserIds.includes(u.id));
-    const filteredReports = state.weeklyReports.filter(r => accessibleUserIds.includes(r.userId));
+    const filteredUsers = (state.users || []).filter(u => accessibleUserIds.includes(u.id));
+    const filteredReports = (state.weeklyReports || []).filter(r => accessibleUserIds.includes(r.userId));
 
     const filteredGroups = (state.workingGroups || []).filter(g =>
-        g.memberIds.includes(myId) ||
+        (g.memberIds || []).includes(myId) ||
         state.teams.some(t =>
-            t.projects.some(p =>
+            (t.projects || []).some(p =>
                 p.id === g.projectId && (
                     p.managerId === myId ||
-                    p.members.some(m => m.userId === myId) ||
+                    (p.members || []).some(m => m.userId === myId) ||
                     t.managerId === myId
                 )
             )
         )
     );
 
-    const filteredMeetings = state.meetings.filter(m => {
-        const hasAttendee = m.attendees.some(attId => accessibleUserIds.includes(attId));
-        const hasActionOwner = m.actionItems.some(ai => accessibleUserIds.includes(ai.ownerId));
+    const filteredMeetings = (state.meetings || []).filter(m => {
+        const hasAttendee = (m.attendees || []).some(attId => accessibleUserIds.includes(attId));
+        const hasActionOwner = (m.actionItems || []).some(ai => accessibleUserIds.includes(ai.ownerId));
         return hasAttendee || hasActionOwner;
     });
 
-    const filteredTeams = state.teams.map(team => {
-        const visibleProjects = team.projects.filter(p => {
+    const filteredTeams = (state.teams || []).map(team => {
+        const visibleProjects = (team.projects || []).filter(p => {
             const isManager = accessibleUserIds.includes(p.managerId || '');
-            const isMember = p.members.some(m => accessibleUserIds.includes(m.userId));
+            const isMember = (p.members || []).some(m => accessibleUserIds.includes(m.userId));
             const isSharedWith = (p.sharedWith || []).includes(myId);
             return isManager || isMember || isSharedWith;
         });
@@ -184,12 +184,12 @@ const computeDynamicNotifications = (state: AppState): AppNotification[] => {
   const dismissedAlerts = state.dismissedAlerts || {};
 
   // 1. Stale project notifications (no audit update in 10 days)
-  state.teams.forEach(team => {
-    team.projects.forEach(project => {
+  (state.teams || []).forEach(team => {
+    (team.projects || []).forEach(project => {
       if (project.isArchived || project.status === 'Done') return;
 
       // Check if user follows this project (is member or manager)
-      const isFollowing = project.members.some(m => m.userId === userId) ||
+      const isFollowing = (project.members || []).some(m => m.userId === userId) ||
                           project.managerId === userId ||
                           team.managerId === userId;
       if (!isFollowing) return;
@@ -231,7 +231,7 @@ const computeDynamicNotifications = (state: AppState): AppNotification[] => {
   });
 
   // 2. Weekly report overdue notifications (no report in 8+ days)
-  const userReports = state.weeklyReports.filter(r => r.userId === userId);
+  const userReports = (state.weeklyReports || []).filter(r => r.userId === userId);
   if (userReports.length === 0) {
     const dismissKey = `report_overdue_${userId}`;
     const dismissedDate = dismissedAlerts[dismissKey];
@@ -364,7 +364,7 @@ const AppContent: React.FC = () => {
     const handleConflict = (e: Event) => {
         const detail = (e as CustomEvent).detail;
         if (detail?.serverData) {
-            const serverData = detail.serverData as AppState;
+            const serverData = sanitizeAppState(detail.serverData);
             setAppState(currentState => {
                 if (!currentState) return serverData;
                 const mergedState = {
@@ -428,7 +428,7 @@ const AppContent: React.FC = () => {
     const isAdmin = appState.currentUser.role === UserRole.ADMIN;
 
     const storedUnseen = (appState.notifications || []).filter(n => {
-      if (n.seenBy.includes(userId)) return false;
+      if ((n.seenBy || []).includes(userId)) return false;
       if (n.targetRole === 'admin' && isAdmin) return true;
       if (n.targetRole === 'user' && n.targetUserId === userId) return true;
       return false;
@@ -511,7 +511,7 @@ const AppContent: React.FC = () => {
     const newState = updateAppState(curr => ({
       ...curr,
       notifications: (curr.notifications || []).map(n =>
-        n.id === notificationId ? { ...n, seenBy: [...n.seenBy, userId] } : n
+        n.id === notificationId ? { ...n, seenBy: [...(n.seenBy || []), userId] } : n
       )
     }));
     setAppState(newState);
@@ -538,8 +538,8 @@ const AppContent: React.FC = () => {
       notifications: (curr.notifications || []).map(n => {
         const isRelevant = (n.targetRole === 'admin' && appState.currentUser?.role === UserRole.ADMIN) ||
                            (n.targetRole === 'user' && n.targetUserId === userId);
-        if (isRelevant && !n.seenBy.includes(userId)) {
-          return { ...n, seenBy: [...n.seenBy, userId] };
+        if (isRelevant && !(n.seenBy || []).includes(userId)) {
+          return { ...n, seenBy: [...(n.seenBy || []), userId] };
         }
         return n;
       }),

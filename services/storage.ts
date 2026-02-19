@@ -1,20 +1,88 @@
 
-import { User, Team, Meeting, UserRole, TaskStatus, TaskPriority, ProjectStatus, ProjectRole, ActionItemStatus, AppState, LLMConfig, WeeklyReport } from '../types';
+import { User, Team, Meeting, UserRole, TaskStatus, TaskPriority, ProjectStatus, ProjectRole, ActionItemStatus, AppState, LLMConfig, WeeklyReport, AppNotification, WorkingGroup } from '../types';
 
 const STORAGE_KEY = 'teamsync_data_v15';
 const VERSION_KEY = 'teamsync_app_version';
 
 // CHANGEZ CETTE VALEUR pour forcer une purge chez tous les utilisateurs
 // Exemple : passez de '1.0.0' à '1.0.1' lors d'une mise à jour de structure.
-const CURRENT_APP_VERSION = '1.0.1'; 
+const CURRENT_APP_VERSION = '1.0.2';
 
 // L'URL relative permet de fonctionner quel que soit le nom de domaine ou l'IP du serveur
-const API_URL = '/api/data'; 
+const API_URL = '/api/data';
 
 const DEFAULT_LLM_CONFIG: LLMConfig = {
     provider: 'ollama',
     baseUrl: 'http://localhost:11434',
     model: 'llama3'
+};
+
+/**
+ * Sanitize data loaded from db.json or localStorage to ensure backward compatibility.
+ * Old data may be missing fields added in recent versions (notifications, workingGroups, etc.)
+ * and nested arrays (seenBy, memberIds, attendees, actionItems, etc.) may be undefined.
+ */
+export const sanitizeAppState = (data: any): AppState => {
+    if (!data) return getDefaultState();
+
+    // Top-level arrays and objects
+    const state: AppState = {
+        users: Array.isArray(data.users) ? data.users : [],
+        teams: Array.isArray(data.teams) ? data.teams : [],
+        meetings: Array.isArray(data.meetings) ? data.meetings : [],
+        weeklyReports: Array.isArray(data.weeklyReports) ? data.weeklyReports : [],
+        workingGroups: Array.isArray(data.workingGroups) ? data.workingGroups : [],
+        notifications: Array.isArray(data.notifications) ? data.notifications : [],
+        dismissedAlerts: data.dismissedAlerts && typeof data.dismissedAlerts === 'object' ? data.dismissedAlerts : {},
+        systemMessage: data.systemMessage || { active: false, content: '', level: 'info' },
+        currentUser: data.currentUser || null,
+        theme: data.theme || 'light',
+        llmConfig: data.llmConfig || DEFAULT_LLM_CONFIG,
+        prompts: data.prompts || {},
+        lastUpdated: data.lastUpdated || 0,
+    };
+
+    // Sanitize nested notification objects (seenBy may be missing in old data)
+    state.notifications = state.notifications.map((n: any): AppNotification => ({
+        ...n,
+        seenBy: Array.isArray(n.seenBy) ? n.seenBy : [],
+        createdAt: n.createdAt || new Date().toISOString(),
+        targetRole: n.targetRole || 'admin',
+    }));
+
+    // Sanitize meetings (attendees, actionItems may be missing)
+    state.meetings = state.meetings.map((m: any): Meeting => ({
+        ...m,
+        attendees: Array.isArray(m.attendees) ? m.attendees : [],
+        actionItems: Array.isArray(m.actionItems) ? m.actionItems : [],
+        decisions: Array.isArray(m.decisions) ? m.decisions : [],
+    }));
+
+    // Sanitize working groups (memberIds, sessions may be missing)
+    state.workingGroups = state.workingGroups.map((g: any): WorkingGroup => ({
+        ...g,
+        memberIds: Array.isArray(g.memberIds) ? g.memberIds : [],
+        sessions: Array.isArray(g.sessions) ? g.sessions : [],
+        archived: g.archived ?? false,
+    }));
+
+    // Sanitize teams and their projects
+    state.teams = state.teams.map((team: any) => ({
+        ...team,
+        projects: Array.isArray(team.projects) ? team.projects.map((p: any) => ({
+            ...p,
+            members: Array.isArray(p.members) ? p.members : [],
+            tasks: Array.isArray(p.tasks) ? p.tasks : [],
+            sharedWith: Array.isArray(p.sharedWith) ? p.sharedWith : [],
+            dependencies: Array.isArray(p.dependencies) ? p.dependencies : [],
+            externalDependencies: Array.isArray(p.externalDependencies) ? p.externalDependencies : [],
+            auditLog: Array.isArray(p.auditLog) ? p.auditLog : [],
+            additionalDescriptions: Array.isArray(p.additionalDescriptions) ? p.additionalDescriptions : [],
+            docUrls: Array.isArray(p.docUrls) ? p.docUrls : [],
+        })) : [],
+    }));
+
+    return state;
 };
 
 const INITIAL_ADMIN: User = { 
@@ -57,15 +125,7 @@ export const loadState = (): AppState => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Ensure defaults
-      if (!parsed.llmConfig) parsed.llmConfig = DEFAULT_LLM_CONFIG;
-      if (!parsed.weeklyReports) parsed.weeklyReports = [];
-      if (!parsed.workingGroups) parsed.workingGroups = [];
-      if (!parsed.notifications) parsed.notifications = [];
-      if (!parsed.dismissedAlerts) parsed.dismissedAlerts = {};
-      // Ensure systemMessage exists
-      if (!parsed.systemMessage) parsed.systemMessage = { active: false, content: '', level: 'info' };
-      return parsed;
+      return sanitizeAppState(parsed);
     }
   } catch (error) {
     console.error("Local load failed", error);
@@ -103,7 +163,7 @@ export const fetchFromServer = async (): Promise<AppState | null> => {
             const data = await response.json();
             // Basic validation
             if (data && (data.users || data.teams)) {
-                return data as AppState;
+                return sanitizeAppState(data);
             }
         }
     } catch (e) {
