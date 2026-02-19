@@ -133,17 +133,18 @@ const getFilteredState = (state: AppState): AppState => {
         const visibleProjects = team.projects.filter(p => {
             const isManager = accessibleUserIds.includes(p.managerId || '');
             const isMember = p.members.some(m => accessibleUserIds.includes(m.userId));
-            return isManager || isMember;
+            const isSharedWith = (p.sharedWith || []).includes(myId);
+            return isManager || isMember || isSharedWith;
         });
 
         const iManageTeam = accessibleUserIds.includes(team.managerId);
 
         if (iManageTeam) {
-            return team; 
+            return team;
         } else if (visibleProjects.length > 0) {
             return { ...team, projects: visibleProjects };
         }
-        
+
         return null; // Hide team completely
     }).filter(t => t !== null) as Team[];
 
@@ -341,6 +342,43 @@ const AppContent: React.FC = () => {
   const handleAddTeam = createHandler((curr, t: Team) => ({...curr, teams: [...curr.teams, t]}));
   const handleDeleteTeam = createHandler((curr, id: string) => ({...curr, teams: curr.teams.filter(t => t.id !== id)}));
 
+  // Direct project deletion bypassing team merge logic
+  const handleDeleteProject = (teamId: string, projectId: string) => {
+      const newState = updateAppState(curr => ({
+          ...curr,
+          teams: curr.teams.map(t =>
+              t.id === teamId
+                  ? { ...t, projects: t.projects.filter(p => p.id !== projectId) }
+                  : t
+          )
+      }));
+      setAppState(newState);
+  };
+
+  // Transfer a project from one team to another
+  const handleTransferProject = (fromTeamId: string, projectId: string, toTeamId: string) => {
+      const newState = updateAppState(curr => {
+          const fromTeam = curr.teams.find(t => t.id === fromTeamId);
+          if (!fromTeam) return curr;
+          const project = fromTeam.projects.find(p => p.id === projectId);
+          if (!project) return curr;
+
+          return {
+              ...curr,
+              teams: curr.teams.map(t => {
+                  if (t.id === fromTeamId) {
+                      return { ...t, projects: t.projects.filter(p => p.id !== projectId) };
+                  }
+                  if (t.id === toTeamId) {
+                      return { ...t, projects: [...t.projects, project] };
+                  }
+                  return t;
+              })
+          };
+      });
+      setAppState(newState);
+  };
+
   const handleUpdateReport = createHandler((curr, r: WeeklyReportType) => {
       const idx = curr.weeklyReports.findIndex(rep => rep.id === r.id);
       const newReports = [...curr.weeklyReports];
@@ -473,7 +511,7 @@ const AppContent: React.FC = () => {
         <div className="p-8">
             {activeTab === 'dashboard' && <KPIDashboard teams={viewState.teams} systemMessage={viewState.systemMessage} />}
             {activeTab === 'management' && <ManagementDashboard teams={viewState.teams} users={viewState.users} reports={viewState.weeklyReports} meetings={viewState.meetings} workingGroups={viewState.workingGroups || []} llmConfig={appState.llmConfig} onUpdateReport={handleUpdateReport} onUpdateTeam={handleUpdateTeam} />}
-            {activeTab === 'projects' && <ProjectTracker teams={viewState.teams} users={viewState.users} currentUser={appState.currentUser} llmConfig={appState.llmConfig} prompts={appState.prompts} onUpdateTeam={handleUpdateTeam} />}
+            {activeTab === 'projects' && <ProjectTracker teams={viewState.teams} users={viewState.users} currentUser={appState.currentUser} llmConfig={appState.llmConfig} prompts={appState.prompts} onUpdateTeam={handleUpdateTeam} onDeleteProject={handleDeleteProject} onTransferProject={handleTransferProject} allTeams={appState.teams} allUsers={appState.users} />}
             {activeTab === 'book-of-work' && <BookOfWork teams={viewState.teams} users={viewState.users} onUpdateTeam={handleUpdateTeam} />}
             {activeTab === 'working-groups' && <WorkingGroupModule groups={viewState.workingGroups || []} users={viewState.users} teams={viewState.teams} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onUpdateGroup={handleUpdateGroup} onDeleteGroup={handleDeleteGroup} />}
             {activeTab === 'weekly-report' && <WeeklyReport reports={viewState.weeklyReports} users={viewState.users} teams={viewState.teams} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onSaveReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />}
