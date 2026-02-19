@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, ErrorInfo, ReactNode, Component } from 'react';
+import React, { useState, useEffect, useMemo, ErrorInfo, ReactNode, Component } from 'react';
 import Sidebar from './components/Sidebar';
 import AdminPanel from './components/AdminPanel';
 import ProjectTracker from './components/ProjectTracker';
@@ -7,15 +7,17 @@ import KPIDashboard from './components/KPIDashboard';
 import MeetingManager from './components/MeetingManager';
 import SettingsPanel from './components/SettingsPanel';
 import BookOfWork from './components/BookOfWork';
-import WeeklyReport from './components/WeeklyReport'; 
-import ManagementDashboard from './components/ManagementDashboard'; 
-import Login from './components/Login'; 
+import WeeklyReport from './components/WeeklyReport';
+import ManagementDashboard from './components/ManagementDashboard';
+import Login from './components/Login';
 import AIChatSidebar from './components/AIChatSidebar';
+import PRJBotSidebar from './components/PRJBotSidebar';
+import NotificationPanel from './components/NotificationPanel';
 import WorkingGroupModule from './components/WorkingGroup';
 
-import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer } from './services/storage';
-import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage } from './types';
-import { Bell, Sun, Moon, Bot, RefreshCw, Cloud, CloudOff } from 'lucide-react';
+import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer, generateId } from './services/storage';
+import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage, AppNotification } from './types';
+import { Bell, Sun, Moon, Bot, RefreshCw, Cloud, CloudOff, Cpu } from 'lucide-react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -62,13 +64,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         </div>
       );
     }
-    return this.props.children; 
+    return this.props.children;
   }
 }
 
 // --- ACCESS CONTROL UTILS ---
 
-// Recursive function to get all subordinate IDs (direct and indirect)
 const getSubordinateIds = (rootId: string, allUsers: User[]): string[] => {
     const directs = allUsers.filter(u => u.managerId === rootId);
     let ids = directs.map(u => u.id);
@@ -78,38 +79,30 @@ const getSubordinateIds = (rootId: string, allUsers: User[]): string[] => {
     return ids;
 };
 
-// Filter the AppState based on the Current User's hierarchy role
 const getFilteredState = (state: AppState): AppState => {
-    // 1. If Admin, see everything
     if (!state.currentUser || state.currentUser.role === UserRole.ADMIN) {
-        // Ensure defaults even for admin to prevent crashes
         return {
             ...state,
             workingGroups: state.workingGroups || [],
+            notifications: state.notifications || [],
+            dismissedAlerts: state.dismissedAlerts || {},
             systemMessage: state.systemMessage || { active: false, content: '', level: 'info' }
         };
     }
 
     const myId = state.currentUser.id;
-    // 2. Get list of all people under me + myself
     const mySubordinates = getSubordinateIds(myId, state.users);
     const accessibleUserIds = [myId, ...mySubordinates];
 
-    // --- FILTER USERS ---
-    // I can see myself and anyone below me
     const filteredUsers = state.users.filter(u => accessibleUserIds.includes(u.id));
-
-    // --- FILTER REPORTS ---
-    // I can see reports from myself or anyone below me
     const filteredReports = state.weeklyReports.filter(r => accessibleUserIds.includes(r.userId));
 
-    // --- FILTER WORKING GROUPS ---
-    const filteredGroups = (state.workingGroups || []).filter(g => 
-        g.memberIds.includes(myId) || // I am member
-        state.teams.some(t => // Or linked to a project I manage/member
-            t.projects.some(p => 
+    const filteredGroups = (state.workingGroups || []).filter(g =>
+        g.memberIds.includes(myId) ||
+        state.teams.some(t =>
+            t.projects.some(p =>
                 p.id === g.projectId && (
-                    p.managerId === myId || 
+                    p.managerId === myId ||
                     p.members.some(m => m.userId === myId) ||
                     t.managerId === myId
                 )
@@ -117,19 +110,13 @@ const getFilteredState = (state: AppState): AppState => {
         )
     );
 
-    // --- FILTER MEETINGS ---
-    // I can see meetings where I (or a subordinate) am an attendee OR an action owner
     const filteredMeetings = state.meetings.filter(m => {
-        // Is creator/attendee in my scope?
         const hasAttendee = m.attendees.some(attId => accessibleUserIds.includes(attId));
-        // Is action owner in my scope?
         const hasActionOwner = m.actionItems.some(ai => accessibleUserIds.includes(ai.ownerId));
         return hasAttendee || hasActionOwner;
     });
 
-    // --- FILTER TEAMS & PROJECTS (Complex) ---
     const filteredTeams = state.teams.map(team => {
-        // Filter projects first
         const visibleProjects = team.projects.filter(p => {
             const isManager = accessibleUserIds.includes(p.managerId || '');
             const isMember = p.members.some(m => accessibleUserIds.includes(m.userId));
@@ -139,12 +126,12 @@ const getFilteredState = (state: AppState): AppState => {
         const iManageTeam = accessibleUserIds.includes(team.managerId);
 
         if (iManageTeam) {
-            return team; 
+            return team;
         } else if (visibleProjects.length > 0) {
             return { ...team, projects: visibleProjects };
         }
-        
-        return null; // Hide team completely
+
+        return null;
     }).filter(t => t !== null) as Team[];
 
     return {
@@ -153,18 +140,146 @@ const getFilteredState = (state: AppState): AppState => {
         teams: filteredTeams,
         weeklyReports: filteredReports,
         meetings: filteredMeetings,
-        workingGroups: filteredGroups
-        // System message is always passed through
+        workingGroups: filteredGroups,
+        notifications: state.notifications || [],
+        dismissedAlerts: state.dismissedAlerts || {}
     };
+};
+
+// --- NOTIFICATION HELPERS ---
+
+const createNotification = (
+  type: AppNotification['type'],
+  message: string,
+  details?: string,
+  targetRole: 'admin' | 'user' = 'admin',
+  targetUserId?: string,
+  triggeredBy?: string,
+  relatedId?: string
+): AppNotification => ({
+  id: generateId(),
+  type,
+  message,
+  details,
+  relatedId,
+  triggeredBy,
+  targetRole,
+  targetUserId,
+  createdAt: new Date().toISOString(),
+  seenBy: []
+});
+
+// Compute dynamic notifications (stale projects, overdue reports)
+const computeDynamicNotifications = (state: AppState): AppNotification[] => {
+  const notifications: AppNotification[] = [];
+  const currentUser = state.currentUser;
+  if (!currentUser || currentUser.role === UserRole.ADMIN) return notifications;
+
+  const userId = currentUser.id;
+  const now = new Date();
+  const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 3600 * 1000);
+  const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 3600 * 1000);
+  const today = now.toISOString().split('T')[0];
+  const dismissedAlerts = state.dismissedAlerts || {};
+
+  // 1. Stale project notifications (no audit update in 10 days)
+  state.teams.forEach(team => {
+    team.projects.forEach(project => {
+      if (project.isArchived || project.status === 'Done') return;
+
+      // Check if user follows this project (is member or manager)
+      const isFollowing = project.members.some(m => m.userId === userId) ||
+                          project.managerId === userId ||
+                          team.managerId === userId;
+      if (!isFollowing) return;
+
+      // Check last audit entry
+      const auditLog = project.auditLog || [];
+      const lastEntry = auditLog.length > 0
+        ? auditLog.reduce((latest, entry) =>
+            new Date(entry.date) > new Date(latest.date) ? entry : latest, auditLog[0])
+        : null;
+
+      const lastUpdateDate = lastEntry ? new Date(lastEntry.date) : null;
+      const isStale = !lastUpdateDate || lastUpdateDate < tenDaysAgo;
+
+      if (isStale) {
+        const dismissKey = `stale_project_${project.id}_${userId}`;
+        const dismissedDate = dismissedAlerts[dismissKey];
+
+        // If dismissed today, skip; otherwise show again
+        if (dismissedDate === today) return;
+
+        const daysSince = lastUpdateDate
+          ? Math.floor((now.getTime() - lastUpdateDate.getTime()) / 86400000)
+          : null;
+
+        notifications.push({
+          id: `stale_${project.id}`,
+          type: 'stale_project',
+          message: `Project "${project.name}" has no updates${daysSince ? ` for ${daysSince} days` : ''}.`,
+          details: lastEntry ? `Last activity: ${lastEntry.action} by ${lastEntry.userName}` : 'No activity recorded',
+          relatedId: project.id,
+          targetRole: 'user',
+          targetUserId: userId,
+          createdAt: now.toISOString(),
+          seenBy: []
+        });
+      }
+    });
+  });
+
+  // 2. Weekly report overdue notifications (no report in 8+ days)
+  const userReports = state.weeklyReports.filter(r => r.userId === userId);
+  if (userReports.length === 0) {
+    const dismissKey = `report_overdue_${userId}`;
+    const dismissedDate = dismissedAlerts[dismissKey];
+    if (dismissedDate !== today) {
+      notifications.push({
+        id: `report_overdue_${userId}`,
+        type: 'report_overdue',
+        message: 'You have never submitted a weekly report.',
+        details: 'Please submit your weekly report to keep your team informed.',
+        targetRole: 'user',
+        targetUserId: userId,
+        createdAt: now.toISOString(),
+        seenBy: []
+      });
+    }
+  } else {
+    const sorted = [...userReports].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    const lastReport = sorted[0];
+    const lastReportDate = new Date(lastReport.updatedAt);
+
+    if (lastReportDate < eightDaysAgo) {
+      const daysSince = Math.floor((now.getTime() - lastReportDate.getTime()) / 86400000);
+      const dismissKey = `report_overdue_${userId}`;
+      const dismissedDate = dismissedAlerts[dismissKey];
+      if (dismissedDate !== today) {
+        notifications.push({
+          id: `report_overdue_${userId}`,
+          type: 'report_overdue',
+          message: `Your last weekly report was ${daysSince} days ago.`,
+          details: 'Please submit a new weekly report.',
+          targetRole: 'user',
+          targetUserId: userId,
+          createdAt: now.toISOString(),
+          seenBy: []
+        });
+      }
+    }
+  }
+
+  return notifications;
 };
 
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [appState, setAppState] = useState<AppState | null>(null);
-  const [viewState, setViewState] = useState<AppState | null>(null); // The filtered state for UI
+  const [viewState, setViewState] = useState<AppState | null>(null);
   const [reportNotification, setReportNotification] = useState(false);
-  
+
   // Sync Status
   const [isOnline, setIsOnline] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
@@ -173,24 +288,26 @@ const AppContent: React.FC = () => {
   // AI Sidebar
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
 
+  // PRJ Bot Sidebar
+  const [isPrjBotOpen, setIsPrjBotOpen] = useState(false);
+
+  // Notification Panel
+  const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
+
   // --- INITIAL LOAD & POLLING ---
   useEffect(() => {
-    // 1. Load Local first (Instant UI)
     const localData = loadState();
     setAppState(localData);
     applyTheme(localData.theme);
 
-    // 2. Fetch Server Data Immediately (Central Truth)
     const initServerSync = async () => {
         const serverData = await fetchFromServer();
         if (serverData) {
-            // Merge logic: Take server data but keep local session (User & Theme)
             if ((serverData.lastUpdated || 0) > (localData.lastUpdated || 0)) {
-                console.log("📥 Initial Load: Server data is newer. Updating content.");
                 const mergedState = {
                     ...serverData,
-                    currentUser: localData.currentUser, // KEEP LOCAL SESSION
-                    theme: localData.theme // KEEP LOCAL THEME
+                    currentUser: localData.currentUser,
+                    theme: localData.theme
                 };
                 setAppState(mergedState);
                 localStorage.setItem('teamsync_data_v15', JSON.stringify(mergedState));
@@ -202,24 +319,22 @@ const AppContent: React.FC = () => {
     };
     initServerSync();
 
-    // 3. Polling Interval
     const intervalId = setInterval(async () => {
         const serverData = await fetchFromServer();
         if (serverData) {
             setIsOnline(true);
             setLastSyncTime(new Date());
-            
+
             setAppState(currentState => {
                 if (!currentState) return serverData;
-                
+
                 if ((serverData.lastUpdated || 0) > (currentState.lastUpdated || 0)) {
-                    console.log("🔄 Auto-Sync: New data received from server.");
                     setShowSyncToast(true);
                     setTimeout(() => setShowSyncToast(false), 4000);
-                    
+
                     const mergedState = {
                         ...serverData,
-                        currentUser: currentState.currentUser, 
+                        currentUser: currentState.currentUser,
                         theme: currentState.theme,
                         llmConfig: currentState.llmConfig
                     };
@@ -232,7 +347,7 @@ const AppContent: React.FC = () => {
         } else {
             setIsOnline(false);
         }
-    }, 10000); 
+    }, 10000);
 
     const unsubscribe = subscribeToStoreUpdates(() => {
         const freshState = loadState();
@@ -257,7 +372,7 @@ const AppContent: React.FC = () => {
       else document.documentElement.classList.remove('dark');
   };
 
-  // Check reports logic (Use ViewState to only notify about relevant reports)
+  // Check reports logic
   useEffect(() => {
       if (viewState && viewState.currentUser) {
           const userReports = viewState.weeklyReports.filter(r => r.userId === viewState.currentUser?.id);
@@ -270,6 +385,28 @@ const AppContent: React.FC = () => {
           }
       }
   }, [viewState?.weeklyReports, viewState?.currentUser]);
+
+  // Compute dynamic notifications
+  const dynamicNotifications = useMemo(() => {
+    if (!appState) return [];
+    return computeDynamicNotifications(appState);
+  }, [appState?.teams, appState?.weeklyReports, appState?.currentUser, appState?.dismissedAlerts]);
+
+  // Count total unseen notifications for the bell badge
+  const totalUnseenCount = useMemo(() => {
+    if (!appState?.currentUser) return 0;
+    const userId = appState.currentUser.id;
+    const isAdmin = appState.currentUser.role === UserRole.ADMIN;
+
+    const storedUnseen = (appState.notifications || []).filter(n => {
+      if (n.seenBy.includes(userId)) return false;
+      if (n.targetRole === 'admin' && isAdmin) return true;
+      if (n.targetRole === 'user' && n.targetUserId === userId) return true;
+      return false;
+    }).length;
+
+    return storedUnseen + dynamicNotifications.length;
+  }, [appState?.notifications, appState?.currentUser, dynamicNotifications]);
 
   const toggleTheme = () => {
       const newState = updateAppState(current => ({
@@ -300,8 +437,81 @@ const AppContent: React.FC = () => {
 
   const handleLogout = () => {
       updateAppState(current => ({ ...current, currentUser: null }));
-      window.location.reload(); 
+      window.location.reload();
   }
+
+  // --- NOTIFICATION ACTIONS ---
+  const addNotification = (notification: AppNotification) => {
+    const newState = updateAppState(curr => ({
+      ...curr,
+      notifications: [...(curr.notifications || []), notification].slice(-100) // Keep last 100
+    }));
+    setAppState(newState);
+  };
+
+  const handleMarkNotificationSeen = (notificationId: string) => {
+    if (!appState?.currentUser) return;
+    const userId = appState.currentUser.id;
+
+    // Check if it's a dynamic notification (stale/overdue)
+    if (notificationId.startsWith('stale_') || notificationId.startsWith('report_overdue_')) {
+      let dismissKey = '';
+      if (notificationId.startsWith('stale_')) {
+        const projectId = notificationId.replace('stale_', '');
+        dismissKey = `stale_project_${projectId}_${userId}`;
+      } else {
+        dismissKey = `report_overdue_${userId}`;
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      const newState = updateAppState(curr => ({
+        ...curr,
+        dismissedAlerts: { ...(curr.dismissedAlerts || {}), [dismissKey]: today }
+      }));
+      setAppState(newState);
+      return;
+    }
+
+    // Regular stored notification
+    const newState = updateAppState(curr => ({
+      ...curr,
+      notifications: (curr.notifications || []).map(n =>
+        n.id === notificationId ? { ...n, seenBy: [...n.seenBy, userId] } : n
+      )
+    }));
+    setAppState(newState);
+  };
+
+  const handleMarkAllNotificationsSeen = () => {
+    if (!appState?.currentUser) return;
+    const userId = appState.currentUser.id;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Mark all stored notifications as seen
+    const newDismissed = { ...(appState.dismissedAlerts || {}) };
+    dynamicNotifications.forEach(n => {
+      if (n.id.startsWith('stale_')) {
+        const projectId = n.id.replace('stale_', '');
+        newDismissed[`stale_project_${projectId}_${userId}`] = today;
+      } else if (n.id.startsWith('report_overdue_')) {
+        newDismissed[`report_overdue_${userId}`] = today;
+      }
+    });
+
+    const newState = updateAppState(curr => ({
+      ...curr,
+      notifications: (curr.notifications || []).map(n => {
+        const isRelevant = (n.targetRole === 'admin' && appState.currentUser?.role === UserRole.ADMIN) ||
+                           (n.targetRole === 'user' && n.targetUserId === userId);
+        if (isRelevant && !n.seenBy.includes(userId)) {
+          return { ...n, seenBy: [...n.seenBy, userId] };
+        }
+        return n;
+      }),
+      dismissedAlerts: newDismissed
+    }));
+    setAppState(newState);
+  };
 
   // --- HANDLERS ---
   const createHandler = <T,>(updater: (current: AppState, payload: T) => AppState) => {
@@ -314,14 +524,38 @@ const AppContent: React.FC = () => {
   const handleUpdateUser = createHandler((curr, u: User) => ({...curr, users: curr.users.map(us => us.id === u.id ? u : us)}));
   const handleAddUser = createHandler((curr, u: User) => ({...curr, users: [...curr.users, u]}));
   const handleDeleteUser = createHandler((curr, id: string) => ({...curr, users: curr.users.filter(u => u.id !== id)}));
-  
+
+  // Enhanced handleUpdateTeam that generates notifications
   const handleUpdateTeam = (updatedTeamFromUI: Team) => {
       const newState = updateAppState(curr => {
           const originalTeam = curr.teams.find(t => t.id === updatedTeamFromUI.id);
           let finalTeam: Team;
+          const newNotifications: AppNotification[] = [];
+          const currentUserName = curr.currentUser
+            ? `${curr.currentUser.firstName} ${curr.currentUser.lastName}`
+            : 'Unknown';
+
           if (!originalTeam) {
               finalTeam = updatedTeamFromUI;
-              return { ...curr, teams: [...curr.teams, finalTeam] };
+
+              // New team with projects → generate project_created notifications
+              finalTeam.projects.forEach(p => {
+                newNotifications.push(createNotification(
+                  'project_created',
+                  `${currentUserName} created project "${p.name}"`,
+                  `Team: ${finalTeam.name}`,
+                  'admin',
+                  undefined,
+                  curr.currentUser?.id,
+                  p.id
+                ));
+              });
+
+              return {
+                ...curr,
+                teams: [...curr.teams, finalTeam],
+                notifications: [...(curr.notifications || []), ...newNotifications].slice(-100)
+              };
           } else {
               const visibleProjectIds = updatedTeamFromUI.projects.map(p => p.id);
               const hiddenProjects = originalTeam.projects.filter(p => !visibleProjectIds.includes(p.id));
@@ -329,9 +563,78 @@ const AppContent: React.FC = () => {
                   ...updatedTeamFromUI,
                   projects: [...updatedTeamFromUI.projects, ...hiddenProjects]
               };
+
+              // Detect new projects
+              const originalProjectIds = originalTeam.projects.map(p => p.id);
+              updatedTeamFromUI.projects.forEach(p => {
+                if (!originalProjectIds.includes(p.id)) {
+                  newNotifications.push(createNotification(
+                    'project_created',
+                    `${currentUserName} created project "${p.name}"`,
+                    `Team: ${finalTeam.name}`,
+                    'admin',
+                    undefined,
+                    curr.currentUser?.id,
+                    p.id
+                  ));
+                }
+              });
+
+              // Detect updated projects (compare tasks count, status, etc.)
+              updatedTeamFromUI.projects.forEach(p => {
+                const orig = originalTeam.projects.find(op => op.id === p.id);
+                if (!orig) return;
+
+                // New tasks
+                const origTaskIds = orig.tasks.map(t => t.id);
+                p.tasks.forEach(t => {
+                  if (!origTaskIds.includes(t.id)) {
+                    newNotifications.push(createNotification(
+                      'task_created',
+                      `${currentUserName} created task "${t.title}"`,
+                      `Project: ${p.name}`,
+                      'admin',
+                      undefined,
+                      curr.currentUser?.id,
+                      t.id
+                    ));
+                  }
+                });
+
+                // Task updates (status changes)
+                p.tasks.forEach(t => {
+                  const origTask = orig.tasks.find(ot => ot.id === t.id);
+                  if (origTask && origTask.status !== t.status) {
+                    newNotifications.push(createNotification(
+                      'task_updated',
+                      `${currentUserName} updated task "${t.title}" to ${t.status}`,
+                      `Project: ${p.name}`,
+                      'admin',
+                      undefined,
+                      curr.currentUser?.id,
+                      t.id
+                    ));
+                  }
+                });
+
+                // Project status change
+                if (orig.status !== p.status) {
+                  newNotifications.push(createNotification(
+                    'project_updated',
+                    `${currentUserName} changed "${p.name}" status to ${p.status}`,
+                    `Team: ${finalTeam.name}`,
+                    'admin',
+                    undefined,
+                    curr.currentUser?.id,
+                    p.id
+                  ));
+                }
+              });
+
               return {
                   ...curr,
-                  teams: curr.teams.map(t => t.id === finalTeam.id ? finalTeam : t)
+                  teams: curr.teams.map(t => t.id === finalTeam.id ? finalTeam : t),
+                  notifications: [...(curr.notifications || []), ...newNotifications].slice(-100)
               };
           }
       });
@@ -341,12 +644,36 @@ const AppContent: React.FC = () => {
   const handleAddTeam = createHandler((curr, t: Team) => ({...curr, teams: [...curr.teams, t]}));
   const handleDeleteTeam = createHandler((curr, id: string) => ({...curr, teams: curr.teams.filter(t => t.id !== id)}));
 
-  const handleUpdateReport = createHandler((curr, r: WeeklyReportType) => {
+  // Enhanced handleUpdateReport with notifications
+  const handleUpdateReport = (r: WeeklyReportType) => {
+    const newState = updateAppState(curr => {
       const idx = curr.weeklyReports.findIndex(rep => rep.id === r.id);
       const newReports = [...curr.weeklyReports];
+      const isNew = idx < 0;
       if (idx >= 0) newReports[idx] = r; else newReports.push(r);
-      return {...curr, weeklyReports: newReports};
-  });
+
+      const currentUserName = curr.currentUser
+        ? `${curr.currentUser.firstName} ${curr.currentUser.lastName}`
+        : 'Unknown';
+
+      const notif = createNotification(
+        isNew ? 'report_created' : 'report_updated',
+        `${currentUserName} ${isNew ? 'submitted' : 'updated'} a weekly report`,
+        `Week of: ${r.weekOf}`,
+        'admin',
+        undefined,
+        curr.currentUser?.id,
+        r.id
+      );
+
+      return {
+        ...curr,
+        weeklyReports: newReports,
+        notifications: [...(curr.notifications || []), notif].slice(-100)
+      };
+    });
+    setAppState(newState);
+  };
 
   const handleDeleteReport = createHandler((curr, id: string) => ({...curr, weeklyReports: curr.weeklyReports.filter(r => r.id !== id)}));
 
@@ -359,7 +686,6 @@ const AppContent: React.FC = () => {
   const handleDeleteMeeting = createHandler((curr, id: string) => ({...curr, meetings: curr.meetings.filter(m => m.id !== id)}));
 
   const handleUpdateGroup = createHandler((curr, g: WorkingGroup) => {
-      // Ensure workingGroups exists before map/find
       const groups = curr.workingGroups || [];
       const idx = groups.findIndex(grp => grp.id === g.id);
       const newGroups = [...groups];
@@ -375,7 +701,7 @@ const AppContent: React.FC = () => {
 
   const handleUpdateUserPassword = (userId: string, newPass: string) => {
       const newState = updateAppState(curr => ({
-          ...curr, 
+          ...curr,
           users: curr.users.map(u => u.id === userId ? { ...u, password: newPass } : u)
       }));
       setAppState(newState);
@@ -389,7 +715,7 @@ const AppContent: React.FC = () => {
   const handleImportState = (newState: AppState) => {
       setAppState(newState);
       saveState(newState);
-      window.location.reload(); 
+      window.location.reload();
   }
 
   // --- RENDER ---
@@ -406,7 +732,7 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="flex bg-gray-50 dark:bg-gray-950 min-h-screen font-sans transition-colors duration-200">
-      
+
       {/* Smart Sync Toast */}
       {showSyncToast && (
           <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] bg-indigo-600 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300">
@@ -418,20 +744,30 @@ const AppContent: React.FC = () => {
           </div>
       )}
 
-      <AIChatSidebar 
-        isOpen={isAiSidebarOpen} 
-        onClose={() => setIsAiSidebarOpen(false)} 
+      <AIChatSidebar
+        isOpen={isAiSidebarOpen}
+        onClose={() => setIsAiSidebarOpen(false)}
         llmConfig={appState.llmConfig}
         currentUser={appState.currentUser}
       />
 
-      <Sidebar 
-        currentUser={appState.currentUser} 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab}
-        onLogout={handleLogout} 
+      <PRJBotSidebar
+        isOpen={isPrjBotOpen}
+        onClose={() => setIsPrjBotOpen(false)}
+        llmConfig={appState.llmConfig}
+        currentUser={appState.currentUser}
+        teams={viewState.teams}
+        users={viewState.users}
+        onUpdateTeam={handleUpdateTeam}
       />
-      
+
+      <Sidebar
+        currentUser={appState.currentUser}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onLogout={handleLogout}
+      />
+
       <main className="flex-1 ml-64 flex flex-col">
         {/* Header */}
         <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-8 sticky top-0 z-40">
@@ -439,20 +775,29 @@ const AppContent: React.FC = () => {
                 <h2 className="text-lg font-semibold text-gray-800 dark:text-white capitalize">
                     {getPageTitle()}
                 </h2>
-                {/* Connection Status Indicator */}
                 <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${isOnline ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' : 'bg-red-50 text-red-700 border-red-200'}`}>
                     {isOnline ? <Cloud className="w-3 h-3" /> : <CloudOff className="w-3 h-3" />}
                     {isOnline ? 'LIVE SYNC' : 'OFFLINE'}
                 </div>
             </div>
-            
-            <div className="flex items-center gap-6">
-                <button 
+
+            <div className="flex items-center gap-3">
+                {/* AI Assistant Button */}
+                <button
                     onClick={() => setIsAiSidebarOpen(true)}
                     className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                 >
                     <Bot className="w-4 h-4" />
                     AI Assistant
+                </button>
+
+                {/* PRJ Bot Button */}
+                <button
+                    onClick={() => setIsPrjBotOpen(true)}
+                    className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+                >
+                    <Cpu className="w-4 h-4" />
+                    PRJ Bot
                 </button>
 
                 <div className="h-6 w-px bg-gray-200 dark:bg-gray-700"></div>
@@ -461,18 +806,44 @@ const AppContent: React.FC = () => {
                     <button onClick={toggleTheme} className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                         {appState.theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5 text-amber-400" />}
                     </button>
-                    <button className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative">
-                        <Bell className={`w-5 h-5 ${reportNotification ? 'text-red-500' : ''}`} />
-                        {reportNotification && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>}
-                    </button>
+
+                    {/* Notification Bell */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setIsNotifPanelOpen(!isNotifPanelOpen)}
+                        className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
+                      >
+                          <Bell className={`w-5 h-5 ${totalUnseenCount > 0 || reportNotification ? 'text-red-500' : ''}`} />
+                          {totalUnseenCount > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white dark:border-gray-900 px-1">
+                              {totalUnseenCount > 99 ? '99+' : totalUnseenCount}
+                            </span>
+                          )}
+                          {totalUnseenCount === 0 && reportNotification && (
+                            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+                          )}
+                      </button>
+
+                      {isNotifPanelOpen && (
+                        <NotificationPanel
+                          isOpen={isNotifPanelOpen}
+                          onClose={() => setIsNotifPanelOpen(false)}
+                          notifications={appState.notifications || []}
+                          dynamicNotifications={dynamicNotifications}
+                          currentUser={appState.currentUser}
+                          onMarkSeen={handleMarkNotificationSeen}
+                          onMarkAllSeen={handleMarkAllNotificationsSeen}
+                        />
+                      )}
+                    </div>
                 </div>
             </div>
         </header>
 
-        {/* Content - PASS VIEWSTATE (Filtered) to components */}
+        {/* Content */}
         <div className="p-8">
             {activeTab === 'dashboard' && <KPIDashboard teams={viewState.teams} systemMessage={viewState.systemMessage} />}
-            {activeTab === 'management' && <ManagementDashboard teams={viewState.teams} users={viewState.users} reports={viewState.weeklyReports} meetings={viewState.meetings} workingGroups={viewState.workingGroups || []} llmConfig={appState.llmConfig} onUpdateReport={handleUpdateReport} onUpdateTeam={handleUpdateTeam} />}
+            {activeTab === 'management' && <ManagementDashboard teams={viewState.teams} users={viewState.users} reports={viewState.weeklyReports} meetings={viewState.meetings} workingGroups={viewState.workingGroups || []} llmConfig={appState.llmConfig} onUpdateReport={handleUpdateReport} onUpdateTeam={handleUpdateTeam} notifications={appState.notifications || []} currentUserId={appState.currentUser?.id || ''} onMarkNotificationSeen={handleMarkNotificationSeen} />}
             {activeTab === 'projects' && <ProjectTracker teams={viewState.teams} users={viewState.users} currentUser={appState.currentUser} llmConfig={appState.llmConfig} prompts={appState.prompts} onUpdateTeam={handleUpdateTeam} />}
             {activeTab === 'book-of-work' && <BookOfWork teams={viewState.teams} users={viewState.users} onUpdateTeam={handleUpdateTeam} />}
             {activeTab === 'working-groups' && <WorkingGroupModule groups={viewState.workingGroups || []} users={viewState.users} teams={viewState.teams} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onUpdateGroup={handleUpdateGroup} onDeleteGroup={handleDeleteGroup} />}

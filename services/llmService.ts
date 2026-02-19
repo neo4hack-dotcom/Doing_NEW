@@ -830,6 +830,92 @@ const runPrompt = async (prompt: string, config: LLMConfig, images: string[] = [
       }
 }
 
+export const extractProjectFromText = async (text: string, config: LLMConfig): Promise<{
+    project: {
+        name: string;
+        description: string;
+        status: string;
+        deadline: string;
+        owner: string;
+        architect: string;
+    };
+    tasks: {
+        title: string;
+        description: string;
+        priority: string;
+        eta: string;
+        assignee: string;
+    }[];
+}> => {
+    const prompt = `
+You are a Project Extraction Assistant. Analyze the following text (which may come from a JIRA ticket, an email, a presentation, or any project description) and extract structured project and task information.
+
+TEXT TO ANALYZE:
+${text}
+
+CRITICAL RULES:
+1. Extract ONLY information that is explicitly present in the text. Do NOT invent or hallucinate any data.
+2. If a field cannot be determined from the text, leave it as an empty string "".
+3. For tasks, extract any actionable items, deliverables, milestones, or work items mentioned.
+4. For priority, use only: "Low", "Medium", "High", or "Urgent". If not determinable, use "".
+5. For status, use only: "Planning", "Active", "Paused", or "Done". If not determinable, use "Planning".
+6. Dates should be in YYYY-MM-DD format if found. Otherwise "".
+
+RETURN ONLY A VALID JSON OBJECT. NO MARKDOWN. NO CODE BLOCKS. NO EXPLANATION.
+
+Required JSON structure:
+{
+  "project": {
+    "name": "Project name extracted from text",
+    "description": "Project description or summary",
+    "status": "Planning",
+    "deadline": "",
+    "owner": "",
+    "architect": ""
+  },
+  "tasks": [
+    {
+      "title": "Task title",
+      "description": "Task description",
+      "priority": "",
+      "eta": "",
+      "assignee": ""
+    }
+  ]
+}
+`;
+
+    const rawResponse = await runPrompt(prompt, config);
+
+    try {
+        const cleanJson = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        return {
+            project: {
+                name: parsed.project?.name || '',
+                description: parsed.project?.description || '',
+                status: parsed.project?.status || 'Planning',
+                deadline: parsed.project?.deadline || '',
+                owner: parsed.project?.owner || '',
+                architect: parsed.project?.architect || '',
+            },
+            tasks: (parsed.tasks || []).map((t: any) => ({
+                title: t.title || '',
+                description: t.description || '',
+                priority: t.priority || '',
+                eta: t.eta || '',
+                assignee: t.assignee || '',
+            }))
+        };
+    } catch (e) {
+        console.error("Failed to parse project extraction JSON", rawResponse);
+        return {
+            project: { name: '', description: rawResponse, status: 'Planning', deadline: '', owner: '', architect: '' },
+            tasks: []
+        };
+    }
+};
+
 export const fetchOllamaModels = async (baseUrl: string): Promise<string[]> => {
   try {
     const url = baseUrl || 'http://localhost:11434';
