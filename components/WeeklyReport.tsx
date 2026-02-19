@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { User, WeeklyReport as WeeklyReportType, LLMConfig, Team, UserRole, HealthStatus } from '../types';
 import { generateWeeklyReportSummary, generateConsolidatedReport, generateManagerSynthesis } from '../services/llmService';
-import { Save, History, Archive, CheckCircle2, Pencil, Trash2 } from 'lucide-react';
+import { Save, History, Archive, CheckCircle2, Pencil, Trash2, RotateCcw } from 'lucide-react';
 
 import WeeklyReportForm from './weekly-report/WeeklyReportForm';
 import ReportCard from './weekly-report/ReportCard';
 import AutoFillModal from './weekly-report/AutoFillModal';
 import AiResultModal from './weekly-report/AiResultModal';
+import LanguagePickerModal from './LanguagePickerModal';
 
 interface WeeklyReportProps {
   reports: WeeklyReportType[];
@@ -35,6 +36,10 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
   const [showAutoFillModal, setShowAutoFillModal] = useState(false);
   const [selectedReportIdsForFill, setSelectedReportIdsForFill] = useState<string[]>([]);
   const [isFilling, setIsFilling] = useState(false);
+
+  // Language Picker State
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [pendingLlmAction, setPendingLlmAction] = useState<((lang: 'fr' | 'en') => void) | null>(null);
 
   // Current Date Logic
   const getMonday = (d: Date) => {
@@ -172,20 +177,35 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
       setActiveTab('my-report');
   };
 
+  // --- Language Picker Helpers ---
+
+  const askLanguageThen = (action: (lang: 'fr' | 'en') => void) => {
+      setPendingLlmAction(() => action);
+      setShowLanguagePicker(true);
+  };
+
+  const handleLanguageSelected = (lang: 'fr' | 'en') => {
+      setShowLanguagePicker(false);
+      if (pendingLlmAction) {
+          pendingLlmAction(lang);
+          setPendingLlmAction(null);
+      }
+  };
+
   // --- AI Handlers ---
 
-  const handleGenerateEmail = async (reportToUse: WeeklyReportType = currentReport) => {
+  const handleGenerateEmail = async (reportToUse: WeeklyReportType = currentReport, language?: 'fr' | 'en') => {
       if (!llmConfig) return alert("AI Configuration missing");
       setIsGeneratingEmail(true);
       setShowSummaryModal(true);
       setGeneratedEmail('');
       
-      const email = await generateWeeklyReportSummary(reportToUse, currentUser, llmConfig);
+      const email = await generateWeeklyReportSummary(reportToUse, currentUser, llmConfig, language);
       setGeneratedEmail(email);
       setIsGeneratingEmail(false);
   }
 
-  const handleManagerSynthesis = async () => {
+  const handleManagerSynthesis = async (language?: 'fr' | 'en') => {
       if (!llmConfig) return alert("AI Configuration missing");
       if (!currentReport.mainSuccess && !currentReport.mainIssue && !currentReport.incident && !currentReport.otherSection && !currentReport.newThisWeek) {
           return alert("Please fill or auto-fill the report sections before generating a synthesis.");
@@ -194,19 +214,19 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
       setShowSynthesisModal(true);
       setSynthesisResult('');
 
-      const result = await generateManagerSynthesis(currentReport, llmConfig);
+      const result = await generateManagerSynthesis(currentReport, llmConfig, language);
       setSynthesisResult(result);
       setIsSynthesizing(false);
   }
 
-  const handleAutoFill = async () => {
+  const handleAutoFill = async (language?: 'fr' | 'en') => {
       if (!llmConfig) return alert("AI Configuration missing");
       if (selectedReportIdsForFill.length === 0) return alert("Select at least one report");
-      
+
       setIsFilling(true);
       const reportsToProcess = reports.filter(r => selectedReportIdsForFill.includes(r.id));
-      
-      const consolidated = await generateConsolidatedReport(reportsToProcess, users, teams, llmConfig);
+
+      const consolidated = await generateConsolidatedReport(reportsToProcess, users, teams, llmConfig, language);
       
       setCurrentReport({
           ...currentReport,
@@ -232,12 +252,40 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
       }
   }
 
+  // --- Unarchive Handler ---
+  const handleUnarchiveReport = (report: WeeklyReportType) => {
+      if (window.confirm("Restore this report from archives to recent reports?")) {
+          onSaveReport({ ...report, isArchived: false });
+      }
+  };
+
+  const handleArchiveReport = (report: WeeklyReportType) => {
+      if (window.confirm("Archive this report?")) {
+          onSaveReport({ ...report, isArchived: true });
+      }
+  };
+
   // --- Data Filtering for Lists ---
   const sortedReports = [...reports].sort((a, b) => new Date(b.weekOf).getTime() - new Date(a.weekOf).getTime());
   const today = new Date();
   const threeMonthsAgo = new Date(today.setMonth(today.getMonth() - 3));
-  const recentReports = sortedReports.filter(r => new Date(r.weekOf) >= threeMonthsAgo);
-  const archivedReports = sortedReports.filter(r => new Date(r.weekOf) < threeMonthsAgo);
+  // Recent = not explicitly archived AND (within 3 months OR explicitly un-archived)
+  const recentReports = sortedReports.filter(r => {
+      if (r.isArchived === true) return false; // Explicitly archived
+      return true; // Show all non-archived (including old un-archived ones)
+  }).filter(r => {
+      // For reports older than 3 months, only show if explicitly set isArchived=false
+      if (new Date(r.weekOf) < threeMonthsAgo) {
+          return r.isArchived === false; // Explicitly un-archived
+      }
+      return true;
+  });
+  // Archived = explicitly archived OR older than 3 months (and not explicitly un-archived)
+  const archivedReports = sortedReports.filter(r => {
+      if (r.isArchived === true) return true; // Explicitly archived
+      if (r.isArchived === false) return false; // Explicitly un-archived
+      return new Date(r.weekOf) < threeMonthsAgo; // Auto-archive old ones
+  });
   const myHistory = sortedReports.filter(r => r.userId === currentUser?.id);
 
   const reportsByUserForAutoFill = recentReports.reduce((acc, report) => {
@@ -267,7 +315,7 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
             users={users}
             selectedReportIds={selectedReportIdsForFill}
             onToggleReport={handleToggleReportSelection}
-            onConfirm={handleAutoFill}
+            onConfirm={() => askLanguageThen((lang) => handleAutoFill(lang))}
             isFilling={isFilling}
         />
 
@@ -280,13 +328,19 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
             type="email"
         />
 
-        <AiResultModal 
+        <AiResultModal
             isOpen={showSynthesisModal}
             onClose={() => setShowSynthesisModal(false)}
             title="Manager Synthesis"
             content={synthesisResult}
             isLoading={isSynthesizing}
             type="synthesis"
+        />
+
+        <LanguagePickerModal
+            isOpen={showLanguagePicker}
+            onClose={() => { setShowLanguagePicker(false); setPendingLlmAction(null); }}
+            onSelect={handleLanguageSelected}
         />
 
         {/* Header Tabs */}
@@ -322,8 +376,8 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
                     onDelete={() => handleDelete(currentReport.id)}
                     onResetToCurrent={handleResetToCurrent}
                     onAutoFill={() => setShowAutoFillModal(true)}
-                    onManagerSynthesis={handleManagerSynthesis}
-                    onGenerateEmail={() => handleGenerateEmail()}
+                    onManagerSynthesis={() => askLanguageThen((lang) => handleManagerSynthesis(lang))}
+                    onGenerateEmail={() => askLanguageThen((lang) => handleGenerateEmail(currentReport, lang))}
                     isAdmin={isAdmin}
                     llmConfigured={!!llmConfig}
                 />
@@ -393,13 +447,14 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
         {activeTab === 'team-reports' && (
             <div className="grid grid-cols-1 gap-6 animate-in fade-in">
                 {recentReports.map(report => (
-                    <ReportCard 
-                        key={report.id} 
-                        report={report} 
-                        users={users} 
+                    <ReportCard
+                        key={report.id}
+                        report={report}
+                        users={users}
                         currentUser={currentUser}
-                        onGenerateEmail={() => handleGenerateEmail(report)}
+                        onGenerateEmail={() => askLanguageThen((lang) => handleGenerateEmail(report, lang))}
                         onDelete={() => handleDelete(report.id)}
+                        onArchive={() => handleArchiveReport(report)}
                     />
                 ))}
                 {recentReports.length === 0 && <div className="text-center py-12 text-slate-500 dark:text-slate-400 italic">No recent reports found.</div>}
@@ -410,13 +465,14 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
         {activeTab === 'archives' && (
             <div className="grid grid-cols-1 gap-6 animate-in fade-in">
                 {archivedReports.map(report => (
-                    <ReportCard 
-                        key={report.id} 
-                        report={report} 
-                        users={users} 
+                    <ReportCard
+                        key={report.id}
+                        report={report}
+                        users={users}
                         currentUser={currentUser}
-                        onGenerateEmail={() => handleGenerateEmail(report)}
+                        onGenerateEmail={() => askLanguageThen((lang) => handleGenerateEmail(report, lang))}
                         onDelete={() => handleDelete(report.id)}
+                        onUnarchive={() => handleUnarchiveReport(report)}
                     />
                 ))}
                 {archivedReports.length === 0 && <div className="text-center py-12 text-slate-500 dark:text-slate-400 italic">No archived reports found.</div>}

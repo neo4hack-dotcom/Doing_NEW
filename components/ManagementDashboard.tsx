@@ -4,6 +4,7 @@ import { Team, User, WeeklyReport, LLMConfig, Meeting, WorkingGroup, AppNotifica
 import { generateManagementInsight, generateRiskAssessment } from '../services/llmService';
 import { Briefcase, CheckCircle2, ShieldAlert, Zap, LayoutList, Bell, Eye, ClipboardList, AlertTriangle, Clock } from 'lucide-react';
 
+import LanguagePickerModal from './LanguagePickerModal';
 import ManagementStats from './management/ManagementStats';
 import TeamPortfolio from './management/TeamPortfolio';
 import TeamProjectList from './management/TeamProjectList';
@@ -38,8 +39,21 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users,
   // Quick Create State
   const [quickCreateMode, setQuickCreateMode] = useState<'none' | 'project' | 'task'>('none');
 
+  // Language Picker State
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [pendingLlmAction, setPendingLlmAction] = useState<((lang: 'fr' | 'en') => void) | null>(null);
+
+  const askLanguageThen = (action: (lang: 'fr' | 'en') => void) => {
+      setPendingLlmAction(() => action);
+      setShowLanguagePicker(true);
+  };
+  const handleLanguageSelected = (lang: 'fr' | 'en') => {
+      setShowLanguagePicker(false);
+      if (pendingLlmAction) { pendingLlmAction(lang); setPendingLlmAction(null); }
+  };
+
   // Filter admin notifications that haven't been seen
-  const unseenNotifications = notifications.filter(n =>
+  const unseenNotifications = (notifications || []).filter(n =>
     n.targetRole === 'admin' && !n.seenBy.includes(currentUserId)
   );
 
@@ -54,38 +68,42 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users,
       setSelectedReport(null);
   };
 
-  const handleGenerateInsight = async () => {
+  const handleGenerateInsight = () => {
       if (!llmConfig) return alert("AI not configured");
-      setIsAiLoading(true);
-      setShowAiModal(true);
-      setInsightType('synthesis');
-      setAiInsight('');
+      askLanguageThen(async (lang) => {
+          setIsAiLoading(true);
+          setShowAiModal(true);
+          setInsightType('synthesis');
+          setAiInsight('');
 
-      const activeTeams = teams.map(t => ({
-          ...t,
-          projects: t.projects.filter(p => !p.isArchived)
-      }));
+          const activeTeams = teams.map(t => ({
+              ...t,
+              projects: t.projects.filter(p => !p.isArchived)
+          }));
 
-      const insight = await generateManagementInsight(activeTeams, reports, users, llmConfig);
-      setAiInsight(insight);
-      setIsAiLoading(false);
+          const insight = await generateManagementInsight(activeTeams, reports, users, llmConfig, lang);
+          setAiInsight(insight);
+          setIsAiLoading(false);
+      });
   };
 
-  const handleManagerAdvice = async () => {
+  const handleManagerAdvice = () => {
       if (!llmConfig) return alert("AI not configured");
-      setIsAiLoading(true);
-      setShowAiModal(true);
-      setInsightType('risk');
-      setAiInsight('');
+      askLanguageThen(async (lang) => {
+          setIsAiLoading(true);
+          setShowAiModal(true);
+          setInsightType('risk');
+          setAiInsight('');
 
-      const activeTeams = teams.map(t => ({
-          ...t,
-          projects: t.projects.filter(p => !p.isArchived)
-      }));
+          const activeTeams = teams.map(t => ({
+              ...t,
+              projects: t.projects.filter(p => !p.isArchived)
+          }));
 
-      const insight = await generateRiskAssessment(activeTeams, reports, users, llmConfig);
-      setAiInsight(insight);
-      setIsAiLoading(false);
+          const insight = await generateRiskAssessment(activeTeams, reports, users, llmConfig, lang);
+          setAiInsight(insight);
+          setIsAiLoading(false);
+      });
   }
 
   const getNotifIcon = (type: string) => {
@@ -219,6 +237,12 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users,
         </div>
 
         {/* --- MODALS --- */}
+
+        <LanguagePickerModal
+            isOpen={showLanguagePicker}
+            onClose={() => setShowLanguagePicker(false)}
+            onSelect={handleLanguageSelected}
+        />
 
         <AiInsightModal
             isOpen={showAiModal}

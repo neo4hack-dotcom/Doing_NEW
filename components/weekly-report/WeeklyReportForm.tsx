@@ -22,7 +22,9 @@ const WeeklyReportForm: React.FC<WeeklyReportFormProps> = ({
     report, currentUser, currentMonday, onChange, onSave, onDelete, onResetToCurrent, 
     onAutoFill, onManagerSynthesis, onGenerateEmail, isAdmin, llmConfigured 
 }) => {
-    const isPastReport = report.weekOf !== currentMonday;
+    const isPastReport = report.weekOf < currentMonday;
+    const isFutureReport = report.weekOf > currentMonday;
+    const isNotCurrentWeek = report.weekOf !== currentMonday;
 
     return (
         <div className="animate-in fade-in space-y-8">
@@ -63,6 +65,11 @@ const WeeklyReportForm: React.FC<WeeklyReportFormProps> = ({
                                     Editing Past Report
                                 </span>
                             )}
+                            {isFutureReport && (
+                                <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold px-2 py-1 rounded-full border border-blue-200 dark:border-blue-800">
+                                    Future Date
+                                </span>
+                            )}
                         </div>
                         <div className="flex items-center mt-2 gap-2">
                             <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center font-mono">
@@ -79,14 +86,12 @@ const WeeklyReportForm: React.FC<WeeklyReportFormProps> = ({
                     </div>
                     
                     <div className="flex flex-wrap items-center gap-2">
-                        {isPastReport && (
-                            <button 
-                                onClick={onResetToCurrent}
-                                className="px-3 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors flex items-center"
-                            >
-                                <Plus className="w-4 h-4 mr-1" /> New/Current
-                            </button>
-                        )}
+                        <button
+                            onClick={onResetToCurrent}
+                            className="px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg text-sm font-medium transition-colors flex items-center border border-emerald-200 dark:border-emerald-800"
+                        >
+                            <Plus className="w-4 h-4 mr-1" /> New Report
+                        </button>
 
                             {/* Consolidation Magic Button (Admin Only) */}
                             {llmConfigured && isAdmin && onAutoFill && (

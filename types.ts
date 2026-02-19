@@ -144,6 +144,7 @@ export interface Project {
   additionalDescriptions?: string[];
   auditLog?: AuditEntry[];
   sharedWith?: string[]; // User IDs who can see this project regardless of team membership
+  createdByBot?: boolean;
 }
 
 export interface Team {
@@ -191,8 +192,9 @@ export interface WeeklyReport {
   teamHealth?: HealthStatus; 
   projectHealth?: HealthStatus; 
   updatedAt: string;
-  managerCheck?: boolean; 
-  managerAnnotation?: string; 
+  managerCheck?: boolean;
+  managerAnnotation?: string;
+  isArchived?: boolean;
 }
 
 // --- WORKING GROUP TYPES ---

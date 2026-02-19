@@ -570,45 +570,45 @@ export const testConnection = async (config: LLMConfig): Promise<boolean> => {
     }
 };
 
-export const generateTeamReport = async (team: Team, manager: User | undefined, config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
+export const generateTeamReport = async (team: Team, manager: User | undefined, config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
   const data = prepareTeamData(team, manager);
   const template = customPrompts?.['team_report'] || DEFAULT_PROMPTS.team_report;
   const prompt = fillTemplate(template, { DATA: data });
-  return runPrompt(prompt, config);
+  return runPrompt(prompt, config, [], language);
 };
 
-export const generateProjectRoadmap = async (project: Project, users: User[], config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
+export const generateProjectRoadmap = async (project: Project, users: User[], config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
     const data = prepareProjectDetailData(project, users);
     const template = customPrompts?.['project_roadmap'] || DEFAULT_PROMPTS.project_roadmap;
     const prompt = fillTemplate(template, { DATA: data });
-    return runPrompt(prompt, config);
+    return runPrompt(prompt, config, [], language);
 }
 
-export const generateMeetingSummary = async (meeting: Meeting, team: Team | undefined, users: User[], config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
+export const generateMeetingSummary = async (meeting: Meeting, team: Team | undefined, users: User[], config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
     const teamName = team ? team.name : 'General';
     const data = prepareMeetingData(meeting, teamName, meeting.attendees, users);
-    
+
     const template = customPrompts?.['meeting_summary'] || DEFAULT_PROMPTS.meeting_summary;
-    const prompt = fillTemplate(template, { 
+    const prompt = fillTemplate(template, {
         DATA: data,
-        TITLE: meeting.title 
+        TITLE: meeting.title
     });
-    
-    return runPrompt(prompt, config);
+
+    return runPrompt(prompt, config, [], language);
 };
 
-export const generateWeeklyReportSummary = async (report: WeeklyReport, user: User | null, config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
+export const generateWeeklyReportSummary = async (report: WeeklyReport, user: User | null, config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
     const data = prepareWeeklyReportData(report, user);
     const template = customPrompts?.['weekly_email'] || DEFAULT_PROMPTS.weekly_email;
-    const prompt = fillTemplate(template, { 
+    const prompt = fillTemplate(template, {
         DATA: data,
         NAME: `${user?.firstName} ${user?.lastName}`,
         WEEK: report.weekOf
     });
-    return runPrompt(prompt, config);
+    return runPrompt(prompt, config, [], language);
 }
 
-export const generateConsolidatedReport = async (selectedReports: WeeklyReport[], users: User[], teams: Team[], config: LLMConfig, customPrompts?: Record<string, string>): Promise<Record<string, string>> => {
+export const generateConsolidatedReport = async (selectedReports: WeeklyReport[], users: User[], teams: Team[], config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<Record<string, string>> => {
     // 1. Prepare Data
     const reportsText = selectedReports.map(r => {
         const u = users.find(user => user.id === r.userId);
@@ -636,7 +636,7 @@ export const generateConsolidatedReport = async (selectedReports: WeeklyReport[]
     const template = customPrompts?.['weekly_autofill'] || DEFAULT_PROMPTS.weekly_autofill;
     const prompt = fillTemplate(template, { DATA: reportsText });
 
-    const rawResponse = await runPrompt(prompt, config);
+    const rawResponse = await runPrompt(prompt, config, [], language);
     
     try {
         const cleanJson = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -655,7 +655,7 @@ export const generateConsolidatedReport = async (selectedReports: WeeklyReport[]
     }
 }
 
-export const generateManagerSynthesis = async (reportData: WeeklyReport, config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
+export const generateManagerSynthesis = async (reportData: WeeklyReport, config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
     const data = `
     NEW ITEMS:
     ${reportData.newThisWeek}
@@ -679,17 +679,17 @@ export const generateManagerSynthesis = async (reportData: WeeklyReport, config:
     const template = customPrompts?.['manager_synthesis'] || DEFAULT_PROMPTS.manager_synthesis;
     const prompt = fillTemplate(template, { DATA: data });
 
-    return runPrompt(prompt, config);
+    return runPrompt(prompt, config, [], language);
 };
 
-export const generateManagementInsight = async (teams: Team[], reports: WeeklyReport[], users: User[], config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
+export const generateManagementInsight = async (teams: Team[], reports: WeeklyReport[], users: User[], config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
     const data = prepareManagementData(teams, reports, users);
     const template = customPrompts?.['management_insight'] || DEFAULT_PROMPTS.management_insight;
     const prompt = fillTemplate(template, { DATA: data });
-    return runPrompt(prompt, config);
+    return runPrompt(prompt, config, [], language);
 }
 
-export const generateRiskAssessment = async (teams: Team[], reports: WeeklyReport[], users: User[], config: LLMConfig): Promise<string> => {
+export const generateRiskAssessment = async (teams: Team[], reports: WeeklyReport[], users: User[], config: LLMConfig, language?: 'fr' | 'en'): Promise<string> => {
     const projectContext = teams.flatMap(t => t.projects.map(p => {
         const context = (p.additionalDescriptions || []).join(' ');
         const blockedTasks = p.tasks.filter(task => task.status === TaskStatus.BLOCKED).map(t => t.title).join(', ');
@@ -740,23 +740,22 @@ export const generateRiskAssessment = async (teams: Team[], reports: WeeklyRepor
     - **CRITICAL**: Project X is overdue and has blocked tasks since 3 weeks.
     - **HIGH RISK**: User Y reports Red status for 3 consecutive weeks. Burnout risk.
     `;
-    return runPrompt(prompt, config);
+    return runPrompt(prompt, config, [], language);
 }
 
-export const generateWorkingGroupFullReport = async (group: WorkingGroup, teams: Team[], users: User[], config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
+export const generateWorkingGroupFullReport = async (group: WorkingGroup, teams: Team[], users: User[], config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
     const data = prepareWorkingGroupData(group, teams, users, false);
     const template = customPrompts?.['working_group_full'] || DEFAULT_PROMPTS.working_group_full;
     const prompt = fillTemplate(template, { DATA: data });
-    return runPrompt(prompt, config);
+    return runPrompt(prompt, config, [], language);
 };
 
-export const generateWorkingGroupSessionReport = async (group: WorkingGroup, teams: Team[], users: User[], config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
+export const generateWorkingGroupSessionReport = async (group: WorkingGroup, teams: Team[], users: User[], config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
     const data = prepareWorkingGroupData(group, teams, users, true);
-    // Find latest date for title
     const latestDate = group.sessions.length > 0 ? group.sessions[0].date : 'Unknown Date';
     const template = customPrompts?.['working_group_session'] || DEFAULT_PROMPTS.working_group_session;
     const prompt = fillTemplate(template, { DATA: data, DATE: latestDate });
-    return runPrompt(prompt, config);
+    return runPrompt(prompt, config, [], language);
 };
 
 export const sendChatMessage = async (history: ChatMessage[], newPrompt: string, config: LLMConfig, images: string[] = []): Promise<string> => {
@@ -780,7 +779,59 @@ export const sendChatMessage = async (history: ChatMessage[], newPrompt: string,
     return runPrompt(fullPrompt, config, images);
 };
 
-export const generateDocumentSynthesis = async (contentOrDescription: string, config: LLMConfig): Promise<string> => {
+export const generateProjectCard = async (projects: Project[], users: User[], config: LLMConfig, language?: 'fr' | 'en'): Promise<string> => {
+    const projectData = projects.map(p => {
+        const tasks = p.tasks.map(t => ({
+            title: t.title,
+            status: t.status,
+            priority: t.priority,
+            assignee: users.find(u => u.id === t.assigneeId)?.firstName || 'Unassigned',
+            eta: t.eta,
+            isImportant: t.isImportant,
+            actions: (t.actions || []).map(a => `${a.text} (${a.status})`),
+            blockers: t.status === 'Blocked' ? t.description : undefined
+        }));
+        return {
+            name: p.name,
+            status: p.status,
+            deadline: p.deadline,
+            description: p.description,
+            additionalDescriptions: p.additionalDescriptions,
+            externalDependencies: (p.externalDependencies || []).map(d => `${d.label}: ${d.status}`),
+            tasks
+        };
+    });
+
+    const prompt = `
+You are a senior portfolio manager. Generate a comprehensive **Project Card** summarizing the selected projects.
+
+DATA:
+${JSON.stringify(projectData, null, 2)}
+
+EXPECTED FORMAT (Markdown):
+
+## 📊 Portfolio Overview
+A 2-3 sentence executive summary of the overall portfolio health and key themes.
+
+## 🏆 Key Achievements
+- Bullet list of completed work, milestones reached, and wins across all projects. Use **Bold** for highlights.
+
+## 🗺️ Roadmap & Next Steps
+- Bullet list of upcoming deliverables and planned work per project. Include ETAs when available.
+
+## ⚠️ Risks & Blockers
+- Bullet list of blocked tasks, overdue items, red external dependencies. Use **Bold** with "Critical", "Alert" for high-severity items.
+
+## 🔍 Attention Points
+- Functional and technical items requiring management attention. Mention stale projects, resource gaps, or dependency concerns.
+
+Be factual, structured, and actionable. Write in English.
+`;
+
+    return runPrompt(prompt, config, [], language);
+};
+
+export const generateDocumentSynthesis = async (contentOrDescription: string, config: LLMConfig, language?: 'fr' | 'en'): Promise<string> => {
     const prompt = `
     Task: Generate a professional summary of the provided document or content.
     
@@ -794,8 +845,8 @@ export const generateDocumentSynthesis = async (contentOrDescription: string, co
     
     Be creative but precise. Format response in clean Markdown. Answer in ENGLISH.
     `;
-    
-    return runPrompt(prompt, config);
+
+    return runPrompt(prompt, config, [], language);
 }
 
 const cleanLLMOutput = (text: string): string => {
@@ -808,18 +859,26 @@ const cleanLLMOutput = (text: string): string => {
     return cleaned.trim();
 };
 
-const runPrompt = async (prompt: string, config: LLMConfig, images: string[] = []): Promise<string> => {
+const runPrompt = async (prompt: string, config: LLMConfig, images: string[] = [], language?: 'fr' | 'en'): Promise<string> => {
     try {
+        // Append language instruction if specified
+        let finalPrompt = prompt;
+        if (language === 'fr') {
+            finalPrompt += '\n\nIMPORTANT OUTPUT INSTRUCTION: You MUST write your entire response in FRENCH (Français). All output must be in French.';
+        } else if (language === 'en') {
+            finalPrompt += '\n\nIMPORTANT OUTPUT INSTRUCTION: You MUST write your entire response in ENGLISH. All output must be in English.';
+        }
+
         let result = "";
         switch (config.provider) {
           case 'ollama':
-            result = await callOllama(prompt, config, images);
+            result = await callOllama(finalPrompt, config, images);
             break;
           case 'local_http':
-            result = await callLocalHttp(prompt, config);
+            result = await callLocalHttp(finalPrompt, config);
             break;
           case 'n8n':
-            result = await callN8n(prompt, config);
+            result = await callN8n(finalPrompt, config);
             break;
           default:
             return `Provider ${config.provider} not supported. Use Local AI only.`;

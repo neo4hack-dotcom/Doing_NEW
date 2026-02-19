@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Team, Project, Task, TaskStatus, TaskPriority, ProjectStatus, User, UserRole, LLMConfig, ChecklistItem, ExternalDependency, TaskAction, TaskActionStatus } from '../types';
-import { generateTeamReport, generateProjectRoadmap } from '../services/llmService';
+import { generateTeamReport, generateProjectRoadmap, generateProjectCard } from '../services/llmService';
 import FormattedText from './FormattedText';
+import LanguagePickerModal from './LanguagePickerModal';
 import {
     CheckCircle2, Clock, AlertCircle, PlayCircle, PauseCircle, Plus,
     ChevronDown, Bot, Calendar, Users as UsersIcon, MoreHorizontal,
@@ -68,6 +69,15 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
   const [loadingRoadmap, setLoadingRoadmap] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
 
+  // AI Project Card State
+  const [aiProjectCard, setAiProjectCard] = useState<string | null>(null);
+  const [loadingProjectCard, setLoadingProjectCard] = useState(false);
+  const [showProjectCardModal, setShowProjectCardModal] = useState(false);
+
+  // Language Picker State
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [pendingLlmAction, setPendingLlmAction] = useState<((lang: 'fr' | 'en') => void) | null>(null);
+
   const currentTeam = teams.find(t => t.id === selectedTeamId);
   const teamManager = users.find(u => u.id === currentTeam?.managerId);
 
@@ -84,6 +94,7 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
             setEditingProject(null);
             setEditingTask(null);
             setShowRoadmapModal(false);
+            setShowProjectCardModal(false);
             setShowAuditModal(null);
             setTransferProject(null);
         }
@@ -178,36 +189,68 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
       }
   };
 
-  const handleGenerateReport = async () => {
-    if (!currentTeam) return;
-    setLoadingAi(true);
-    setAiReport(null);
-    
-    // Filter projects if specific ones are selected, otherwise use all visible
-    const visibleProjects = currentTeam.projects.filter(p => !!p.isArchived === showArchived);
-    const projectsToAnalyze = selectedProjectIds.length > 0 
-        ? visibleProjects.filter(p => selectedProjectIds.includes(p.id)) 
-        : visibleProjects;
-
-    // Create a temporary team object with only the relevant projects for the AI
-    const scopedTeam = {
-        ...currentTeam,
-        projects: projectsToAnalyze
-    };
-
-    // Pass prompts prop
-    const report = await generateTeamReport(scopedTeam, teamManager, llmConfig, prompts);
-    setAiReport(report);
-    setLoadingAi(false);
+  // Language picker trigger helper
+  const askLanguageThen = (action: (lang: 'fr' | 'en') => void) => {
+      setPendingLlmAction(() => action);
+      setShowLanguagePicker(true);
   };
 
-  const handleGenerateRoadmap = async (project: Project) => {
-      setLoadingRoadmap(true);
-      setShowRoadmapModal(true);
-      setAiRoadmap(null);
-      const roadmap = await generateProjectRoadmap(project, users, llmConfig, prompts);
-      setAiRoadmap(roadmap);
+  const handleLanguageSelected = (lang: 'fr' | 'en') => {
+      setShowLanguagePicker(false);
+      if (pendingLlmAction) {
+          pendingLlmAction(lang);
+          setPendingLlmAction(null);
+      }
+  };
+
+  const handleGenerateReport = () => {
+    if (!currentTeam) return;
+    askLanguageThen(async (lang) => {
+        setLoadingAi(true);
+        setAiReport(null);
+
+        const visibleProjects = currentTeam.projects.filter(p => !!p.isArchived === showArchived);
+        const projectsToAnalyze = selectedProjectIds.length > 0
+            ? visibleProjects.filter(p => selectedProjectIds.includes(p.id))
+            : visibleProjects;
+
+        const scopedTeam = {
+            ...currentTeam,
+            projects: projectsToAnalyze
+        };
+
+        const report = await generateTeamReport(scopedTeam, teamManager, llmConfig, prompts, lang);
+        setAiReport(report);
+        setLoadingAi(false);
+    });
+  };
+
+  const handleGenerateRoadmap = (project: Project) => {
+      askLanguageThen(async (lang) => {
+          setLoadingRoadmap(true);
+          setShowRoadmapModal(true);
+          setAiRoadmap(null);
+          const roadmap = await generateProjectRoadmap(project, users, llmConfig, prompts, lang);
+          setAiRoadmap(roadmap);
       setLoadingRoadmap(false);
+  };
+
+  const handleGenerateProjectCard = () => {
+      if (!currentTeam) return;
+      askLanguageThen(async (lang) => {
+          setLoadingProjectCard(true);
+          setShowProjectCardModal(true);
+          setAiProjectCard(null);
+
+          const visibleProjects = currentTeam.projects.filter(p => !!p.isArchived === showArchived);
+          const projectsToAnalyze = selectedProjectIds.length > 0
+              ? visibleProjects.filter(p => selectedProjectIds.includes(p.id))
+              : visibleProjects;
+
+          const card = await generateProjectCard(projectsToAnalyze, users, llmConfig, lang);
+          setAiProjectCard(card);
+          setLoadingProjectCard(false);
+      });
   };
 
   const cleanTextForClipboard = (text: string) => {
@@ -296,8 +339,12 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
               const project = team.projects.find(p => p.id === projectId);
               if (project) {
                   project.isArchived = false;
-                  project.completedAt = undefined; // Clear completion date
-                  project.auditLog = addAuditEntry(project, 'Restored', 'Project restored from archive');
+                  project.completedAt = undefined;
+                  // Reset status from Done to Active since Done is not available for live projects
+                  if (project.status === ProjectStatus.DONE) {
+                      project.status = ProjectStatus.ACTIVE;
+                  }
+                  project.auditLog = addAuditEntry(project, 'Restored', 'Project restored from archive (status reset to Active)');
               }
           });
           setSelectedProjectIds(prev => prev.filter(id => id !== projectId));
@@ -665,7 +712,15 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto relative">
-      
+
+      {/* Language Picker Modal */}
+      <LanguagePickerModal
+          isOpen={showLanguagePicker}
+          onClose={() => { setShowLanguagePicker(false); setPendingLlmAction(null); }}
+          onSelect={handleLanguageSelected}
+      />
+
+
       {/* Datalist for User suggestions (used in Project Owner/Architect inputs) */}
       <datalist id="user-list-suggestions">
           {users.map(u => (
@@ -1332,7 +1387,7 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
       )}
 
       {/* Transfer Project Modal */}
-      {transferProject && currentUser?.role === UserRole.ADMIN && (
+      {transferProject && (currentUser?.role === UserRole.ADMIN || currentTeam?.managerId === currentUser?.id) && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
               <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700 p-6">
                   <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-4 mb-4">
@@ -1361,7 +1416,12 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
                               className="w-full p-2.5 border rounded-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white"
                           >
                               <option value="">Select a team...</option>
-                              {(allTeams || teams).filter(t => t.id !== selectedTeamId).map(t => (
+                              {(allTeams || teams).filter(t => {
+                                  if (t.id === selectedTeamId) return false;
+                                  // Admins can transfer to any team; managers only to their own teams
+                                  if (currentUser?.role === UserRole.ADMIN) return true;
+                                  return t.managerId === currentUser?.id;
+                              }).map(t => (
                                   <option key={t.id} value={t.id}>{t.name}</option>
                               ))}
                           </select>
@@ -1426,13 +1486,22 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
                 </button>
             )}
 
-            <button 
+            <button
                 onClick={handleGenerateReport}
                 disabled={loadingAi}
                 className="flex items-center px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
             >
                 {loadingAi ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/> : <Bot className="w-4 h-4 mr-2" />}
                 {loadingAi ? 'Analyzing...' : (selectedProjectIds.length > 0 ? `AI Report (${selectedProjectIds.length})` : `AI Report (All)`)}
+            </button>
+
+            <button
+                onClick={handleGenerateProjectCard}
+                disabled={loadingProjectCard}
+                className="flex items-center px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+            >
+                {loadingProjectCard ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/> : <BrainCircuit className="w-4 h-4 mr-2" />}
+                {loadingProjectCard ? 'Generating...' : (selectedProjectIds.length > 0 ? `AI Project Card (${selectedProjectIds.length})` : `AI Project Card`)}
             </button>
         </div>
       </div>
@@ -1472,6 +1541,52 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
             {/* UTILISATION DE FORMATTED TEXT ICI */}
             <FormattedText text={aiReport} />
         </div>
+      )}
+
+      {/* AI Project Card Modal */}
+      {showProjectCardModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r from-purple-600 to-indigo-600 rounded-t-2xl">
+                      <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                          <BrainCircuit className="w-6 h-6" />
+                          AI Project Card {selectedProjectIds.length > 0 ? `(${selectedProjectIds.length} Projects)` : '(All Projects)'}
+                      </h3>
+                      <button onClick={() => setShowProjectCardModal(false)} className="text-white hover:text-indigo-200">
+                          <X className="w-5 h-5" />
+                      </button>
+                  </div>
+                  <div className="p-6 overflow-y-auto flex-1 bg-slate-50 dark:bg-slate-950">
+                      {loadingProjectCard ? (
+                          <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
+                              <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
+                              <p className="font-medium">Generating Project Card...</p>
+                              <p className="text-xs text-slate-400 mt-1">Analyzing projects, tasks, and dependencies</p>
+                          </div>
+                      ) : aiProjectCard ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-none bg-white dark:bg-slate-800 p-8 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+                              <FormattedText text={aiProjectCard} />
+                          </div>
+                      ) : null}
+                  </div>
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 bg-white dark:bg-slate-900 rounded-b-2xl">
+                      <button
+                          onClick={() => exportToDoc(aiProjectCard, "Project_Card_AI.doc")}
+                          disabled={loadingProjectCard || !aiProjectCard}
+                          className="px-4 py-2 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                      >
+                          <Download className="w-4 h-4" /> Export Doc
+                      </button>
+                      <button
+                          onClick={() => copyToClipboard(aiProjectCard)}
+                          disabled={loadingProjectCard || !aiProjectCard}
+                          className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                      >
+                          <Copy className="w-4 h-4" /> Copy
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
 
       {/* Bulk Selection Header */}
@@ -1571,7 +1686,7 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
                                     {project.name}
                                     {project.createdByBot && (
                                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded text-[10px] font-bold border border-emerald-200 dark:border-emerald-800" title="Created by PRJ Bot">
-                                            <Cpu className="w-3 h-3" />
+                                            <Bot className="w-3 h-3" />
                                             BOT
                                         </span>
                                     )}
@@ -1579,13 +1694,15 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
                                 
                                 {/* Quick Status Change Project (Disabled if Archived) */}
                                 <div onClick={(e) => e.stopPropagation()}>
-                                    <select 
+                                    <select
                                         value={project.status}
                                         onChange={(e) => handleProjectUpdate(project.id, 'status', e.target.value)}
                                         disabled={project.isArchived}
                                         className={`px-2.5 py-0.5 rounded-full text-xs font-bold border flex items-center gap-1.5 cursor-pointer appearance-none ${getStatusColor(project.status)} disabled:opacity-70 disabled:cursor-not-allowed`}
                                     >
-                                        {Object.values(ProjectStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                                        {Object.values(ProjectStatus)
+                                            .filter(s => project.isArchived ? true : s !== ProjectStatus.DONE)
+                                            .map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
 
@@ -1691,8 +1808,8 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
                                  <Pencil className="w-4 h-4" />
                              </button>
 
-                             {/* Transfer Project Button (Admin Only) */}
-                             {isExpanded && currentUser?.role === UserRole.ADMIN && onTransferProject && (
+                             {/* Transfer Project Button (Admin or Team Manager) */}
+                             {isExpanded && (currentUser?.role === UserRole.ADMIN || currentTeam?.managerId === currentUser?.id) && onTransferProject && (
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();

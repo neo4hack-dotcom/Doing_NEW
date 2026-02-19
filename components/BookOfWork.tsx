@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Team, User, Project, ProjectStatus, ProjectRole, Team as TeamType, ExternalDependency } from '../types';
-import { Search, ExternalLink, Link as LinkIcon, Users, Network, Calendar, ChevronDown, ChevronRight, LayoutGrid, List, Plus, X, Save, Trash2, Sparkles, Link2, ArrowUpDown, Cpu } from 'lucide-react';
+import { Search, ExternalLink, Link as LinkIcon, Users, Network, Calendar, ChevronDown, ChevronRight, LayoutGrid, List, Plus, X, Save, Trash2, Sparkles, Link2, ArrowUpDown, Bot } from 'lucide-react';
 
 interface BookOfWorkProps {
     teams: Team[];
@@ -516,7 +516,7 @@ const BookOfWork: React.FC<BookOfWorkProps> = ({ teams, users, onUpdateTeam }) =
                                 {project.name}
                                 {(project as any).createdByBot && (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded text-[10px] font-bold border border-emerald-200 dark:border-emerald-800" title="Created by PRJ Bot">
-                                        <Cpu className="w-3 h-3" />
+                                        <Bot className="w-3 h-3" />
                                         BOT
                                     </span>
                                 )}

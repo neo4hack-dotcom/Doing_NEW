@@ -4,7 +4,7 @@ import { Project, User, TaskStatus, ProjectStatus, TaskPriority, Task, TaskActio
 import { 
     AlertTriangle, Calendar, Pencil, Trash2, RotateCcw, Archive, ChevronDown,
     Eye, EyeOff, ArrowUpAz, Sparkles, Plus, AlertCircle, ListTodo,
-    Flag, Scale, UserPlus, UserCircle2, Link2, Network, Crown, PenTool, Coins, History, Star, ExternalLink, Globe, Cpu
+    Flag, Scale, UserPlus, UserCircle2, Link2, Network, Crown, PenTool, Coins, History, Star, ExternalLink, Globe, Bot
 } from 'lucide-react';
 
 interface ProjectCardProps {
@@ -128,20 +128,22 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                                 {project.name}
                                 {project.createdByBot && (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded text-[10px] font-bold border border-emerald-200 dark:border-emerald-800" title="Created by PRJ Bot">
-                                        <Cpu className="w-3 h-3" />
+                                        <Bot className="w-3 h-3" />
                                         BOT
                                     </span>
                                 )}
                             </h3>
                             
                             <div onClick={(e) => e.stopPropagation()}>
-                                <select 
+                                <select
                                     value={project.status}
                                     onChange={(e) => onUpdateProjectStatus(project.id, e.target.value as ProjectStatus)}
                                     disabled={project.isArchived}
                                     className={`px-2.5 py-0.5 rounded-full text-xs font-bold border flex items-center gap-1.5 cursor-pointer appearance-none ${getStatusColor(project.status)} disabled:opacity-70 disabled:cursor-not-allowed`}
                                 >
-                                    {Object.values(ProjectStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                                    {Object.values(ProjectStatus)
+                                        .filter(s => project.isArchived ? true : s !== ProjectStatus.DONE)
+                                        .map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
 
