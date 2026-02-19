@@ -157,13 +157,14 @@ export interface Team {
 export interface Meeting {
   id: string;
   teamId: string;
-  projectId?: string; 
+  projectId?: string;
   date: string;
   title: string;
   attendees: string[];
   minutes: string;
   decisions?: { id: string, text: string }[];
   actionItems: ActionItem[];
+  createdByBot?: boolean;
 }
 
 export interface ActionItem {
