@@ -425,11 +425,13 @@ const AppContent: React.FC = () => {
     return computeDynamicNotifications(appState);
   }, [appState?.teams, appState?.weeklyReports, appState?.currentUser, appState?.dismissedAlerts]);
 
+  // Admin check at component level (also used in JSX render)
+  const isAdmin = appState?.currentUser?.role === UserRole.ADMIN ?? false;
+
   // Count total unseen notifications for the bell badge
   const totalUnseenCount = useMemo(() => {
     if (!appState?.currentUser) return 0;
     const userId = appState.currentUser.id;
-    const isAdmin = appState.currentUser.role === UserRole.ADMIN;
 
     const storedUnseen = (appState.notifications || []).filter(n => {
       if ((n.seenBy || []).includes(userId)) return false;
