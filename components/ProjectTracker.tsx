@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Team, Project, Task, TaskStatus, TaskPriority, ProjectStatus, User, LLMConfig, ChecklistItem, ExternalDependency, TaskAction, TaskActionStatus } from '../types';
+import { Team, Project, Task, TaskStatus, TaskPriority, ProjectStatus, User, UserRole, LLMConfig, ChecklistItem, ExternalDependency, TaskAction, TaskActionStatus } from '../types';
 import { generateTeamReport, generateProjectRoadmap } from '../services/llmService';
 import FormattedText from './FormattedText';
-import { 
-    CheckCircle2, Clock, AlertCircle, PlayCircle, PauseCircle, Plus, 
-    ChevronDown, Bot, Calendar, Users as UsersIcon, MoreHorizontal, 
-    Flag, UserCircle2, Pencil, AlertTriangle, X, Save, Trash2, Scale, ListTodo, ArrowUpAz, Download, Copy, Eye, EyeOff, Sparkles, Briefcase, Link2, CheckSquare, Square, UserPlus, MessageCircle, Map, Crown, PenTool, LayoutList, BrainCircuit, Archive, RotateCcw, Coins, Star, ArrowUp, ArrowDown, Cpu
+import {
+    CheckCircle2, Clock, AlertCircle, PlayCircle, PauseCircle, Plus,
+    ChevronDown, Bot, Calendar, Users as UsersIcon, MoreHorizontal,
+    Flag, UserCircle2, Pencil, AlertTriangle, X, Save, Trash2, Scale, ListTodo, ArrowUpAz, Download, Copy, Eye, EyeOff, Sparkles, Briefcase, Link2, CheckSquare, Square, UserPlus, MessageCircle, Map, Crown, PenTool, LayoutList, BrainCircuit, Archive, RotateCcw, Coins, Star, ArrowUp, ArrowDown, ArrowRightLeft, Share2
 } from 'lucide-react';
 
 interface ProjectTrackerProps {
@@ -14,11 +14,15 @@ interface ProjectTrackerProps {
   users: User[];
   currentUser: User | null;
   llmConfig: LLMConfig;
-  prompts?: Record<string, string>; // New Prop for Prompts
+  prompts?: Record<string, string>;
   onUpdateTeam: (team: Team) => void;
+  onDeleteProject?: (teamId: string, projectId: string) => void;
+  onTransferProject?: (fromTeamId: string, projectId: string, toTeamId: string) => void;
+  allTeams?: Team[];
+  allUsers?: User[];
 }
 
-const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUser, llmConfig, prompts, onUpdateTeam }) => {
+const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUser, llmConfig, prompts, onUpdateTeam, onDeleteProject, onTransferProject, allTeams, allUsers }) => {
   const [selectedTeamId, setSelectedTeamId] = useState<string>(teams[0]?.id || '');
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([]);
   const [aiReport, setAiReport] = useState<string | null>(null);
@@ -35,6 +39,10 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
   const [editingTask, setEditingTask] = useState<{ projectId: string, task: Task } | null>(null);
   const [showAuditModal, setShowAuditModal] = useState<string | null>(null); // Project ID for Audit
   
+  // Transfer Modal State
+  const [transferProject, setTransferProject] = useState<{ projectId: string, projectName: string } | null>(null);
+  const [transferTargetTeamId, setTransferTargetTeamId] = useState<string>('');
+
   // New Checklist Item State
   const [newChecklistItem, setNewChecklistItem] = useState('');
   
@@ -77,6 +85,7 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
             setEditingTask(null);
             setShowRoadmapModal(false);
             setShowAuditModal(null);
+            setTransferProject(null);
         }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -305,13 +314,35 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
   };
 
   const handleDeleteProject = (projectId: string) => {
-      if(!window.confirm("Are you sure you want to delete this project? This action cannot be undone.")) return;
-      updateTeamData(team => {
-          team.projects = team.projects.filter(p => p.id !== projectId);
-      });
+      if (!currentTeam) return;
+      const project = currentTeam.projects.find(p => p.id === projectId);
+      const projectName = project?.name || 'this project';
+      if (!window.confirm(`Are you sure you want to permanently delete "${projectName}"? This action cannot be undone.`)) return;
+      if (!window.confirm(`FINAL CONFIRMATION: All tasks and data for "${projectName}" will be permanently lost. Continue?`)) return;
+
+      if (onDeleteProject) {
+          onDeleteProject(currentTeam.id, projectId);
+      } else {
+          updateTeamData(team => {
+              team.projects = team.projects.filter(p => p.id !== projectId);
+          });
+      }
       setExpandedProjectIds(prev => prev.filter(id => id !== projectId));
-      // Remove from selection if deleted
       setSelectedProjectIds(prev => prev.filter(id => id !== projectId));
+  };
+
+  // Transfer project handler
+  const handleTransferProjectConfirm = () => {
+      if (!transferProject || !transferTargetTeamId || !currentTeam || !onTransferProject) return;
+      const targetTeam = (allTeams || teams).find(t => t.id === transferTargetTeamId);
+      if (!targetTeam) return;
+      if (!window.confirm(`Transfer "${transferProject.projectName}" to team "${targetTeam.name}"?`)) return;
+
+      onTransferProject(currentTeam.id, transferProject.projectId, transferTargetTeamId);
+      setTransferProject(null);
+      setTransferTargetTeamId('');
+      setExpandedProjectIds(prev => prev.filter(id => id !== transferProject.projectId));
+      setSelectedProjectIds(prev => prev.filter(id => id !== transferProject.projectId));
   };
 
   const handleAddTask = (projectId: string) => {
@@ -914,6 +945,66 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
                           </div>
                       </div>
 
+                      {/* Visibility Sharing (Admin Only) */}
+                      {currentUser?.role === UserRole.ADMIN && (
+                          <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-5 rounded-xl border border-emerald-100 dark:border-emerald-800 space-y-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                  <Share2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                  <div>
+                                      <h4 className="text-sm font-bold text-emerald-900 dark:text-emerald-100">Project Visibility</h4>
+                                      <p className="text-xs text-emerald-600 dark:text-emerald-400 opacity-80">
+                                          Grant access to users who are not members of this team. They will see this project and its tasks.
+                                      </p>
+                                  </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                  {(editingProject.sharedWith || []).map(userId => {
+                                      const sharedUser = (allUsers || users).find(u => u.id === userId);
+                                      if (!sharedUser) return null;
+                                      return (
+                                          <span key={userId} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-full text-xs font-medium text-slate-700 dark:text-slate-300">
+                                              <div className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-[8px] font-bold">
+                                                  {sharedUser.firstName[0]}
+                                              </div>
+                                              {sharedUser.firstName} {sharedUser.lastName}
+                                              <button
+                                                  onClick={() => setEditingProject({
+                                                      ...editingProject,
+                                                      sharedWith: (editingProject.sharedWith || []).filter(id => id !== userId)
+                                                  })}
+                                                  className="text-slate-400 hover:text-red-500 ml-1"
+                                              >
+                                                  <X className="w-3 h-3" />
+                                              </button>
+                                          </span>
+                                      );
+                                  })}
+                              </div>
+                              <select
+                                  value=""
+                                  onChange={e => {
+                                      if (!e.target.value) return;
+                                      const current = editingProject.sharedWith || [];
+                                      if (!current.includes(e.target.value)) {
+                                          setEditingProject({
+                                              ...editingProject,
+                                              sharedWith: [...current, e.target.value]
+                                          });
+                                      }
+                                  }}
+                                  className="w-full p-2 text-sm border rounded-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                              >
+                                  <option value="">Add a person...</option>
+                                  {(allUsers || users)
+                                      .filter(u => !(editingProject.sharedWith || []).includes(u.id))
+                                      .map(u => (
+                                          <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.role})</option>
+                                      ))
+                                  }
+                              </select>
+                          </div>
+                      )}
+
                       <div className="flex items-center gap-2 mt-2">
                           <input type="checkbox" id="projImp" checked={editingProject.isImportant} onChange={e => setEditingProject({...editingProject, isImportant: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded" />
                           <label htmlFor="projImp" className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-red-500" /> Mark as Important</label>
@@ -1240,8 +1331,62 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
           </div>
       )}
 
-      {/* ... (Team Header, AI Report, Bulk Selection components remain same) ... */}
-      
+      {/* Transfer Project Modal */}
+      {transferProject && currentUser?.role === UserRole.ADMIN && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-4 mb-4">
+                      <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
+                          <ArrowRightLeft className="w-5 h-5 text-indigo-500" />
+                          Transfer Project
+                      </h3>
+                      <button onClick={() => { setTransferProject(null); setTransferTargetTeamId(''); }}>
+                          <X className="w-5 h-5 text-slate-400" />
+                      </button>
+                  </div>
+                  <div className="space-y-4">
+                      <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg">
+                          <p className="text-xs text-slate-500 uppercase font-bold mb-1">Project</p>
+                          <p className="text-sm font-medium text-slate-900 dark:text-white">{transferProject.projectName}</p>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg">
+                          <p className="text-xs text-slate-500 uppercase font-bold mb-1">From Team</p>
+                          <p className="text-sm font-medium text-slate-900 dark:text-white">{currentTeam?.name}</p>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Destination Team</label>
+                          <select
+                              value={transferTargetTeamId}
+                              onChange={e => setTransferTargetTeamId(e.target.value)}
+                              className="w-full p-2.5 border rounded-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                          >
+                              <option value="">Select a team...</option>
+                              {(allTeams || teams).filter(t => t.id !== selectedTeamId).map(t => (
+                                  <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                          </select>
+                      </div>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
+                      <button
+                          onClick={() => { setTransferProject(null); setTransferTargetTeamId(''); }}
+                          className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                      >
+                          Cancel
+                      </button>
+                      <button
+                          onClick={handleTransferProjectConfirm}
+                          disabled={!transferTargetTeamId}
+                          className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                          <ArrowRightLeft className="w-4 h-4" />
+                          Transfer
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Team Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -1486,6 +1631,16 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
                                         ))}
                                     </>
                                 )}
+
+                                {/* Shared With indicator */}
+                                {(project.sharedWith || []).length > 0 && (
+                                    <>
+                                        <div className="h-3 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                                        <span className="flex items-center text-[10px] bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-800">
+                                            <Share2 className="w-3 h-3 mr-1" /> Shared ({project.sharedWith!.length})
+                                        </span>
+                                    </>
+                                )}
                             </div>
                         </div>
 
@@ -1536,12 +1691,27 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
                                  <Pencil className="w-4 h-4" />
                              </button>
 
+                             {/* Transfer Project Button (Admin Only) */}
+                             {isExpanded && currentUser?.role === UserRole.ADMIN && onTransferProject && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setTransferProject({ projectId: project.id, projectName: project.name });
+                                        setTransferTargetTeamId('');
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                    title="Transfer to Another Team"
+                                >
+                                    <ArrowRightLeft className="w-4 h-4" />
+                                </button>
+                             )}
+
                              {/* Project Delete Button */}
                              {isExpanded && (
-                                <button 
+                                <button
                                     onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}
                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                                    title="Delete Project"
+                                    title="Delete Project Permanently"
                                 >
                                     <Trash2 className="w-4 h-4" />
                                 </button>

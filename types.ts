@@ -141,9 +141,9 @@ export interface Project {
   docUrls?: string[]; 
   dependencies?: string[]; 
   externalDependencies?: ExternalDependency[]; 
-  additionalDescriptions?: string[]; 
+  additionalDescriptions?: string[];
   auditLog?: AuditEntry[];
-  createdByBot?: boolean;
+  sharedWith?: string[]; // User IDs who can see this project regardless of team membership
 }
 
 export interface Team {
