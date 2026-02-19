@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Team, User, Project, ProjectStatus, ProjectRole, Team as TeamType, ExternalDependency } from '../types';
-import { Search, ExternalLink, Link as LinkIcon, Users, Network, Calendar, ChevronDown, ChevronRight, LayoutGrid, List, Plus, X, Save, Trash2, Sparkles, Link2, ArrowUpDown } from 'lucide-react';
+import { Search, ExternalLink, Link as LinkIcon, Users, Network, Calendar, ChevronDown, ChevronRight, LayoutGrid, List, Plus, X, Save, Trash2, Sparkles, Link2, ArrowUpDown, Cpu } from 'lucide-react';
 
 interface BookOfWorkProps {
     teams: Team[];
@@ -512,7 +512,15 @@ const BookOfWork: React.FC<BookOfWorkProps> = ({ teams, users, onUpdateTeam }) =
                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{project.teamName}</span>
                                 {getStatusBadge(project.status)}
                             </div>
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{project.name}</h3>
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center gap-2">
+                                {project.name}
+                                {(project as any).createdByBot && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded text-[10px] font-bold border border-emerald-200 dark:border-emerald-800" title="Created by PRJ Bot">
+                                        <Cpu className="w-3 h-3" />
+                                        BOT
+                                    </span>
+                                )}
+                            </h3>
                             <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mb-4 h-10">{project.description}</p>
                             
                             {/* Metadata */}

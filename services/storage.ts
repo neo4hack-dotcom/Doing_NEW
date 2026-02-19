@@ -61,6 +61,8 @@ export const loadState = (): AppState => {
       if (!parsed.llmConfig) parsed.llmConfig = DEFAULT_LLM_CONFIG;
       if (!parsed.weeklyReports) parsed.weeklyReports = [];
       if (!parsed.workingGroups) parsed.workingGroups = [];
+      if (!parsed.notifications) parsed.notifications = [];
+      if (!parsed.dismissedAlerts) parsed.dismissedAlerts = {};
       // Ensure systemMessage exists
       if (!parsed.systemMessage) parsed.systemMessage = { active: false, content: '', level: 'info' };
       return parsed;
@@ -81,7 +83,9 @@ const getDefaultState = (): AppState => {
         teams: [],
         meetings: [],
         weeklyReports: [],
-        workingGroups: [], 
+        workingGroups: [],
+        notifications: [],
+        dismissedAlerts: {},
         systemMessage: { active: false, content: '', level: 'info' },
         currentUser: null, 
         theme: 'light',

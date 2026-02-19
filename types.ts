@@ -223,6 +223,26 @@ export interface WorkingGroup {
   archived: boolean;
 }
 
+// --- NOTIFICATION TYPES ---
+export type NotificationType =
+  | 'project_created' | 'project_updated'
+  | 'task_created' | 'task_updated'
+  | 'report_created' | 'report_updated'
+  | 'stale_project' | 'report_overdue';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  message: string;
+  details?: string;
+  relatedId?: string;
+  triggeredBy?: string;
+  targetRole: 'admin' | 'user';
+  targetUserId?: string;
+  createdAt: string;
+  seenBy: string[];
+}
+
 // --- SYSTEM CONFIG ---
 export interface SystemMessage {
     active: boolean;
@@ -235,11 +255,13 @@ export interface AppState {
   teams: Team[];
   meetings: Meeting[];
   weeklyReports: WeeklyReport[];
-  workingGroups: WorkingGroup[]; 
-  systemMessage?: SystemMessage; // New: Global Announcement
+  workingGroups: WorkingGroup[];
+  notifications: AppNotification[];
+  dismissedAlerts: { [key: string]: string }; // key -> ISO date of dismissal, per-user stored locally
+  systemMessage?: SystemMessage;
   currentUser: User | null;
   theme: 'light' | 'dark';
   llmConfig: LLMConfig;
   prompts?: Record<string, string>;
-  lastUpdated?: number; 
+  lastUpdated?: number;
 }

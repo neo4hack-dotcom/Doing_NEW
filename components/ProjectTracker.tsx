@@ -1567,7 +1567,15 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
                                 {project.isImportant && (
                                     <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" fill="currentColor" fillOpacity={0.2} />
                                 )}
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{project.name}</h3>
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-2">
+                                    {project.name}
+                                    {project.createdByBot && (
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded text-[10px] font-bold border border-emerald-200 dark:border-emerald-800" title="Created by PRJ Bot">
+                                            <Cpu className="w-3 h-3" />
+                                            BOT
+                                        </span>
+                                    )}
+                                </h3>
                                 
                                 {/* Quick Status Change Project (Disabled if Archived) */}
                                 <div onClick={(e) => e.stopPropagation()}>

@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import { Project, User, TaskStatus, ProjectStatus, TaskPriority, Task, TaskActionStatus } from '../types';
 import { 
-    AlertTriangle, Calendar, Pencil, Trash2, RotateCcw, Archive, ChevronDown, 
-    Eye, EyeOff, ArrowUpAz, Sparkles, Plus, AlertCircle, ListTodo, 
-    Flag, Scale, UserPlus, UserCircle2, Link2, Network, Crown, PenTool, Coins, History, Star, ExternalLink, Globe
+    AlertTriangle, Calendar, Pencil, Trash2, RotateCcw, Archive, ChevronDown,
+    Eye, EyeOff, ArrowUpAz, Sparkles, Plus, AlertCircle, ListTodo,
+    Flag, Scale, UserPlus, UserCircle2, Link2, Network, Crown, PenTool, Coins, History, Star, ExternalLink, Globe, Cpu
 } from 'lucide-react';
 
 interface ProjectCardProps {
@@ -124,7 +124,15 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                             {project.isImportant && (
                                 <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" fill="currentColor" fillOpacity={0.2} />
                             )}
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{project.name}</h3>
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-2">
+                                {project.name}
+                                {project.createdByBot && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded text-[10px] font-bold border border-emerald-200 dark:border-emerald-800" title="Created by PRJ Bot">
+                                        <Cpu className="w-3 h-3" />
+                                        BOT
+                                    </span>
+                                )}
+                            </h3>
                             
                             <div onClick={(e) => e.stopPropagation()}>
                                 <select 
