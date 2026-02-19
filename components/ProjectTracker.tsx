@@ -232,7 +232,8 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
           setAiRoadmap(null);
           const roadmap = await generateProjectRoadmap(project, users, llmConfig, prompts, lang);
           setAiRoadmap(roadmap);
-      setLoadingRoadmap(false);
+          setLoadingRoadmap(false);
+      });
   };
 
   const handleGenerateProjectCard = () => {
