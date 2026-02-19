@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { WeeklyReport as WeeklyReportType, HealthStatus, UserRole, User } from '../../types';
-import { Sparkles, CheckCircle2, AlertOctagon, AlertTriangle, Users, MoreHorizontal, MessageSquare, Plus, Wand2, Mail, Save, Calendar, Trash2 } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertOctagon, AlertTriangle, Users, MoreHorizontal, Plus, Wand2, Mail, Save, Calendar, Trash2, ShieldCheck } from 'lucide-react';
 
 interface WeeklyReportFormProps {
     report: WeeklyReportType;
@@ -14,44 +14,31 @@ interface WeeklyReportFormProps {
     onAutoFill?: () => void;
     onManagerSynthesis?: () => void;
     onGenerateEmail?: () => void;
+    onSaveFeedback?: (annotation: string) => void;
     isAdmin: boolean;
     llmConfigured: boolean;
 }
 
-const WeeklyReportForm: React.FC<WeeklyReportFormProps> = ({ 
-    report, currentUser, currentMonday, onChange, onSave, onDelete, onResetToCurrent, 
-    onAutoFill, onManagerSynthesis, onGenerateEmail, isAdmin, llmConfigured 
+const WeeklyReportForm: React.FC<WeeklyReportFormProps> = ({
+    report, currentUser, currentMonday, onChange, onSave, onDelete, onResetToCurrent,
+    onAutoFill, onManagerSynthesis, onGenerateEmail, onSaveFeedback, isAdmin, llmConfigured
 }) => {
     const isPastReport = report.weekOf < currentMonday;
     const isFutureReport = report.weekOf > currentMonday;
     const isNotCurrentWeek = report.weekOf !== currentMonday;
 
+    // Local state for admin feedback (independent from main form edits)
+    const [feedbackText, setFeedbackText] = useState(report.managerAnnotation || '');
+    const [feedbackSaved, setFeedbackSaved] = useState(false);
+
+    // Sync feedback text when a different report is loaded
+    useEffect(() => {
+        setFeedbackText(report.managerAnnotation || '');
+        setFeedbackSaved(false);
+    }, [report.id, report.managerAnnotation]);
+
     return (
         <div className="animate-in fade-in space-y-8">
-            {/* Manager Feedback Section */}
-            {(report.managerCheck || report.managerAnnotation) && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-bold text-blue-700 dark:text-blue-300 flex items-center">
-                                <MessageSquare className="w-4 h-4 mr-2" />
-                                Manager Feedback
-                            </h3>
-                            {report.managerCheck && (
-                                <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs px-2 py-0.5 rounded-full border border-green-200 dark:border-green-800 flex items-center">
-                                    <CheckCircle2 className="w-3 h-3 mr-1" /> Reviewed
-                                </span>
-                            )}
-                    </div>
-                    {report.managerAnnotation ? (
-                        <p className="text-sm text-slate-700 dark:text-slate-300 italic">
-                            "{report.managerAnnotation}"
-                        </p>
-                    ) : (
-                        <p className="text-xs text-slate-500 italic">No written comments.</p>
-                    )}
-                </div>
-            )}
-
             {/* Input Section */}
             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
                 <div className="flex flex-col md:flex-row justify-between items-start mb-6 border-b border-slate-100 dark:border-slate-800 pb-4 gap-4">
@@ -244,7 +231,7 @@ const WeeklyReportForm: React.FC<WeeklyReportFormProps> = ({
                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-400 mb-2 flex items-center">
                             <MoreHorizontal className="w-4 h-4 mr-2" /> Other
                         </label>
-                        <textarea 
+                        <textarea
                             value={report.otherSection}
                             onChange={e => onChange({ otherSection: e.target.value })}
                             className="w-full h-24 p-3 rounded-lg border-0 ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-slate-500 outline-none text-slate-900 dark:text-white placeholder-slate-400"
@@ -253,6 +240,69 @@ const WeeklyReportForm: React.FC<WeeklyReportFormProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Admin Feedback Section — visible to both parties, editable only by admin */}
+            {report.id && (isAdmin || report.managerAnnotation) && (
+                <div className={`p-6 rounded-2xl border-2 ${isAdmin ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800' : 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800'}`}>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className={`font-bold flex items-center gap-2 ${isAdmin ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}`}>
+                            <ShieldCheck className="w-5 h-5" />
+                            Admin Feedback
+                            {report.managerCheck && (
+                                <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs px-2 py-0.5 rounded-full border border-green-200 dark:border-green-800 flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" /> Reviewed
+                                </span>
+                            )}
+                        </h3>
+                        {!isAdmin && (
+                            <span className="text-xs text-blue-500 dark:text-blue-400 italic bg-blue-100 dark:bg-blue-900/20 px-2 py-0.5 rounded-full">Read-only</span>
+                        )}
+                    </div>
+
+                    {isAdmin ? (
+                        <>
+                            <textarea
+                                value={feedbackText}
+                                onChange={e => { setFeedbackText(e.target.value); setFeedbackSaved(false); }}
+                                className="w-full h-28 p-3 rounded-lg border border-amber-200 dark:border-amber-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-amber-400 outline-none text-slate-900 dark:text-white placeholder-amber-300/60 text-sm resize-none"
+                                placeholder="Rédigez votre feedback pour ce rapport... (optionnel)"
+                            />
+                            <div className="flex items-center justify-between mt-3">
+                                <p className="text-xs text-amber-600 dark:text-amber-400 italic">
+                                    Ce feedback est conservé dans le rapport et visible par l'auteur.
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        if (onSaveFeedback) {
+                                            onSaveFeedback(feedbackText);
+                                            setFeedbackSaved(true);
+                                        }
+                                    }}
+                                    disabled={!onSaveFeedback}
+                                    className={`px-4 py-2 text-sm font-medium rounded-lg shadow-sm transition-all flex items-center gap-2 ${
+                                        feedbackSaved
+                                            ? 'bg-green-500 hover:bg-green-600 text-white'
+                                            : 'bg-amber-500 hover:bg-amber-600 text-white'
+                                    }`}
+                                >
+                                    {feedbackSaved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                                    {feedbackSaved ? 'Feedback enregistré' : 'Enregistrer le feedback'}
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-blue-100 dark:border-blue-900/30">
+                            {report.managerAnnotation ? (
+                                <p className="text-sm text-slate-700 dark:text-slate-300 italic whitespace-pre-wrap">
+                                    "{report.managerAnnotation}"
+                                </p>
+                            ) : (
+                                <p className="text-xs text-slate-400 italic">Aucun commentaire pour l'instant.</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

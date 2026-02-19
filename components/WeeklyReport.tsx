@@ -170,11 +170,25 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
 
   const handleLoadReport = (report: WeeklyReportType) => {
       if (isDirty && !window.confirm("You have unsaved changes. Discard them?")) return;
-      
+
       setCurrentReport({ ...report });
       setIsDirty(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       setActiveTab('my-report');
+  };
+
+  // Admin-only: save feedback without touching the user's report content
+  const handleSaveFeedback = (annotation: string) => {
+      if (!currentReport.id) return;
+      // Base on the latest persisted version to avoid overwriting user's unsaved edits
+      const savedReport = reports.find(r => r.id === currentReport.id) || currentReport;
+      onSaveReport({
+          ...savedReport,
+          managerCheck: true,
+          managerAnnotation: annotation
+      });
+      // Keep local currentReport in sync so the form reflects the saved state
+      setCurrentReport(prev => ({ ...prev, managerCheck: true, managerAnnotation: annotation }));
   };
 
   // --- Language Picker Helpers ---
@@ -367,7 +381,7 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
 
         {activeTab === 'my-report' && (
             <div className="space-y-8">
-                <WeeklyReportForm 
+                <WeeklyReportForm
                     report={currentReport}
                     currentUser={currentUser}
                     currentMonday={currentMonday}
@@ -378,6 +392,7 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
                     onAutoFill={() => setShowAutoFillModal(true)}
                     onManagerSynthesis={() => askLanguageThen((lang) => handleManagerSynthesis(lang))}
                     onGenerateEmail={() => askLanguageThen((lang) => handleGenerateEmail(currentReport, lang))}
+                    onSaveFeedback={isAdmin ? handleSaveFeedback : undefined}
                     isAdmin={isAdmin}
                     llmConfigured={!!llmConfig}
                 />
