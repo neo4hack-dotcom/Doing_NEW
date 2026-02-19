@@ -1,0 +1,19 @@
+
+{
+  "timestamp": "2024-05-25T17:45:00Z",
+  "action": "RESTORE_FROM_SRC",
+  "reason": "Correcting project structure drift where files were placed in src/ instead of root.",
+  "filesRestored": [
+    "components/management/ManagementStats.tsx",
+    "components/management/TeamPortfolio.tsx",
+    "components/management/TeamProjectList.tsx",
+    "components/management/QuickCreateModal.tsx",
+    "components/management/ReviewReportModal.tsx",
+    "components/management/AiInsightModal.tsx",
+    "components/modals/TaskEditModal.tsx",
+    "components/modals/ProjectEditModal.tsx",
+    "components/modals/ProjectHistoryModal.tsx",
+    "components/ProjectCard.tsx"
+  ],
+  "instructions": "The 'src' folder can now be safely deleted or ignored. The active application is running from the root directory."
+}
