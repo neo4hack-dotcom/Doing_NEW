@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Meeting, ActionItem, ActionItemStatus, Team, User, LLMConfig } from '../types';
 import { generateMeetingSummary } from '../services/llmService';
+import LanguagePickerModal from './LanguagePickerModal';
 import FormattedText from './FormattedText';
 import { Plus, Calendar, User as UserIcon, CheckSquare, Trash2, Save, FileText, BookOpen, Mail, X, Copy, Loader2, Folder, Briefcase, Download, UserPlus, Gavel } from 'lucide-react';
 
@@ -21,6 +22,19 @@ const MeetingManager: React.FC<MeetingManagerProps> = ({ meetings, teams, users,
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [generatedSummary, setGeneratedSummary] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Language Picker State
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [pendingLlmAction, setPendingLlmAction] = useState<((lang: 'fr' | 'en') => void) | null>(null);
+
+  const askLanguageThen = (action: (lang: 'fr' | 'en') => void) => {
+      setPendingLlmAction(() => action);
+      setShowLanguagePicker(true);
+  };
+  const handleLanguageSelected = (lang: 'fr' | 'en') => {
+      setShowLanguagePicker(false);
+      if (pendingLlmAction) { pendingLlmAction(lang); setPendingLlmAction(null); }
+  };
 
   // State for free text attendee
   const [newAttendeeName, setNewAttendeeName] = useState('');
@@ -72,20 +86,22 @@ const MeetingManager: React.FC<MeetingManagerProps> = ({ meetings, teams, users,
     if (selectedMeetingId === 'new') setSelectedMeetingId(editMeeting.id);
   };
 
-  const handleGenerateSummary = async () => {
+  const handleGenerateSummary = () => {
       if (!editMeeting.minutes && editMeeting.actionItems.length === 0) {
           alert("Please fill minutes or add actions before generating a summary.");
           return;
       }
-      setIsGenerating(true);
-      setShowSummaryModal(true);
-      setGeneratedSummary('');
-      
-      const team = teams.find(t => t.id === editMeeting.teamId);
-      const summary = await generateMeetingSummary(editMeeting, team, users, llmConfig);
-      
-      setGeneratedSummary(summary);
-      setIsGenerating(false);
+      askLanguageThen(async (lang) => {
+          setIsGenerating(true);
+          setShowSummaryModal(true);
+          setGeneratedSummary('');
+
+          const team = teams.find(t => t.id === editMeeting.teamId);
+          const summary = await generateMeetingSummary(editMeeting, team, users, llmConfig, lang);
+
+          setGeneratedSummary(summary);
+          setIsGenerating(false);
+      });
   };
 
   const cleanTextForClipboard = (text: string) => {
@@ -191,6 +207,12 @@ const MeetingManager: React.FC<MeetingManagerProps> = ({ meetings, teams, users,
   return (
     <div className="flex flex-col lg:flex-row h-[calc(100vh-8rem)] gap-6 max-w-7xl mx-auto relative">
       
+      <LanguagePickerModal
+          isOpen={showLanguagePicker}
+          onClose={() => setShowLanguagePicker(false)}
+          onSelect={handleLanguageSelected}
+      />
+
       {/* Summary Modal */}
       {showSummaryModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

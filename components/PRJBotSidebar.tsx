@@ -4,7 +4,7 @@ import { LLMConfig, User, Team, Project, Task, TaskStatus, TaskPriority, Project
 import { extractProjectFromText } from '../services/llmService';
 import { generateId } from '../services/storage';
 import FormattedText from './FormattedText';
-import { X, Send, Paperclip, Bot, FileText, Loader2, Save, Plus, Trash2, ChevronDown, Cpu } from 'lucide-react';
+import { X, Send, Paperclip, Bot, FileText, Loader2, Save, Plus, Trash2, ChevronDown } from 'lucide-react';
 
 interface PRJBotSidebarProps {
   isOpen: boolean;
@@ -180,7 +180,7 @@ const PRJBotSidebar: React.FC<PRJBotSidebarProps> = ({ isOpen, onClose, llmConfi
         <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center text-white shadow-lg">
-              <Cpu className="w-6 h-6" />
+              <Bot className="w-6 h-6" />
             </div>
             <div>
               <h3 className="font-bold text-slate-800 dark:text-white">PRJ Bot</h3>
@@ -252,7 +252,7 @@ const PRJBotSidebar: React.FC<PRJBotSidebarProps> = ({ isOpen, onClose, llmConfi
           {step === 'loading' && (
             <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-20">
               <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white shadow-lg animate-pulse">
-                <Cpu className="w-8 h-8" />
+                <Bot className="w-8 h-8" />
               </div>
               <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
               <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Analyzing your document...</p>
@@ -286,7 +286,7 @@ const PRJBotSidebar: React.FC<PRJBotSidebarProps> = ({ isOpen, onClose, llmConfi
               {/* Project Fields */}
               <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
                 <h4 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-emerald-500" /> Project Details
+                  <Bot className="w-4 h-4 text-emerald-500" /> Project Details
                 </h4>
 
                 <div>

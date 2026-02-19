@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { WeeklyReport as WeeklyReportType, User, HealthStatus, UserRole } from '../../types';
-import { Sparkles, Bot, Trash2 } from 'lucide-react';
+import { Sparkles, Bot, Trash2, RotateCcw, Archive } from 'lucide-react';
 
 interface ReportCardProps {
     report: WeeklyReportType;
@@ -9,9 +9,11 @@ interface ReportCardProps {
     currentUser: User | null;
     onGenerateEmail: (report: WeeklyReportType) => void;
     onDelete?: () => void;
+    onUnarchive?: () => void;
+    onArchive?: () => void;
 }
 
-const ReportCard: React.FC<ReportCardProps> = ({ report, users, currentUser, onGenerateEmail, onDelete }) => {
+const ReportCard: React.FC<ReportCardProps> = ({ report, users, currentUser, onGenerateEmail, onDelete, onUnarchive, onArchive }) => {
     const author = users.find(u => u.id === report.userId);
     
     // Permission Check: Author OR Admin can delete
@@ -46,9 +48,31 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, users, currentUser, onG
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
+                    {/* Unarchive Button */}
+                    {onUnarchive && canDelete && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onUnarchive(); }}
+                            className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-300 p-1.5 rounded-full hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
+                            title="Restore from archive"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                        </button>
+                    )}
+
+                    {/* Archive Button */}
+                    {onArchive && canDelete && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onArchive(); }}
+                            className="text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors opacity-0 group-hover:opacity-100"
+                            title="Archive report"
+                        >
+                            <Archive className="w-4 h-4" />
+                        </button>
+                    )}
+
                     {/* Delete Button (Conditional) */}
                     {onDelete && canDelete && (
-                        <button 
+                        <button
                             onClick={(e) => { e.stopPropagation(); onDelete(); }}
                             className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors opacity-0 group-hover:opacity-100"
                             title="Delete Report"

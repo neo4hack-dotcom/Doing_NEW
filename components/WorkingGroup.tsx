@@ -4,6 +4,7 @@ import { WorkingGroup, WorkingGroupSession, User, Team, ActionItem, ActionItemSt
 import { Plus, Folder, Calendar, CheckSquare, Trash2, X, Save, Edit, UserPlus, Clock, Layout, AlertTriangle, MessageSquare, Siren, FileText, Sparkles, Bot, Loader2, Download, Copy, Flag, Layers, List, Edit2, Gavel } from 'lucide-react';
 import { generateId } from '../services/storage';
 import { generateWorkingGroupFullReport, generateWorkingGroupSessionReport } from '../services/llmService';
+import LanguagePickerModal from './LanguagePickerModal';
 import FormattedText from './FormattedText';
 
 interface WorkingGroupProps {
@@ -39,6 +40,19 @@ const WorkingGroupModule: React.FC<WorkingGroupProps> = ({ groups, users, teams,
     const [aiContent, setAiContent] = useState('');
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [aiModalTitle, setAiModalTitle] = useState('');
+
+    // Language Picker State
+    const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+    const [pendingLlmAction, setPendingLlmAction] = useState<((lang: 'fr' | 'en') => void) | null>(null);
+
+    const askLanguageThen = (action: (lang: 'fr' | 'en') => void) => {
+        setPendingLlmAction(() => action);
+        setShowLanguagePicker(true);
+    };
+    const handleLanguageSelected = (lang: 'fr' | 'en') => {
+        setShowLanguagePicker(false);
+        if (pendingLlmAction) { pendingLlmAction(lang); setPendingLlmAction(null); }
+    };
 
     // --- HELPER FUNCTIONS ---
 
@@ -276,30 +290,33 @@ const WorkingGroupModule: React.FC<WorkingGroupProps> = ({ groups, users, teams,
 
     // --- AI HANDLERS ---
 
-    const handleGenerateFullReport = async () => {
+    const handleGenerateFullReport = () => {
         if (!selectedGroup || !llmConfig) return;
-        setIsAiLoading(true);
-        setAiContent('');
-        setAiModalTitle(`Deep Analysis: ${selectedGroup.title}`);
-        setShowAiModal(true);
+        askLanguageThen(async (lang) => {
+            setIsAiLoading(true);
+            setAiContent('');
+            setAiModalTitle(`Deep Analysis: ${selectedGroup.title}`);
+            setShowAiModal(true);
 
-        const report = await generateWorkingGroupFullReport(selectedGroup, teams, users, llmConfig);
-        setAiContent(report);
-        setIsAiLoading(false);
+            const report = await generateWorkingGroupFullReport(selectedGroup, teams, users, llmConfig, lang);
+            setAiContent(report);
+            setIsAiLoading(false);
+        });
     };
 
-    const handleGenerateSessionReport = async () => {
+    const handleGenerateSessionReport = () => {
         if (!selectedGroup || !llmConfig) return;
         if (selectedGroup.sessions.length === 0) return alert("No sessions to analyze.");
-        
-        setIsAiLoading(true);
-        setAiContent('');
-        setAiModalTitle(`Session Summary: ${selectedGroup.title}`);
-        setShowAiModal(true);
+        askLanguageThen(async (lang) => {
+            setIsAiLoading(true);
+            setAiContent('');
+            setAiModalTitle(`Session Summary: ${selectedGroup.title}`);
+            setShowAiModal(true);
 
-        const report = await generateWorkingGroupSessionReport(selectedGroup, teams, users, llmConfig);
-        setAiContent(report);
-        setIsAiLoading(false);
+            const report = await generateWorkingGroupSessionReport(selectedGroup, teams, users, llmConfig, lang);
+            setAiContent(report);
+            setIsAiLoading(false);
+        });
     }
 
     const copyToClipboard = () => {
@@ -739,6 +756,12 @@ const WorkingGroupModule: React.FC<WorkingGroupProps> = ({ groups, users, teams,
             {renderSessionModal()}
             {renderGroupModal()}
             {renderActionModal()}
+
+            <LanguagePickerModal
+                isOpen={showLanguagePicker}
+                onClose={() => setShowLanguagePicker(false)}
+                onSelect={handleLanguageSelected}
+            />
 
             {/* AI Report Modal */}
             {showAiModal && (

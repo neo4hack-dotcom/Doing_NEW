@@ -17,7 +17,7 @@ import WorkingGroupModule from './components/WorkingGroup';
 
 import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer, generateId } from './services/storage';
 import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage, AppNotification } from './types';
-import { Bell, Sun, Moon, Bot, RefreshCw, Cloud, CloudOff, Cpu } from 'lucide-react';
+import { Bell, Sun, Moon, Bot, RefreshCw, Cloud, CloudOff } from 'lucide-react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -285,6 +285,7 @@ const AppContent: React.FC = () => {
   const [isOnline, setIsOnline] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
   const [showSyncToast, setShowSyncToast] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   // AI Sidebar
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
@@ -302,20 +303,24 @@ const AppContent: React.FC = () => {
     applyTheme(localData.theme);
 
     const initServerSync = async () => {
-        const serverData = await fetchFromServer();
-        if (serverData) {
-            if ((serverData.lastUpdated || 0) > (localData.lastUpdated || 0)) {
+        try {
+            const serverData = await fetchFromServer();
+            if (serverData) {
+                // Always prefer server data on startup to avoid desynchronization
                 const mergedState = {
                     ...serverData,
                     currentUser: localData.currentUser,
-                    theme: localData.theme
+                    theme: localData.theme,
+                    llmConfig: localData.llmConfig || serverData.llmConfig
                 };
                 setAppState(mergedState);
                 localStorage.setItem('teamsync_data_v15', JSON.stringify(mergedState));
+                setIsOnline(true);
+            } else {
+                setIsOnline(false);
             }
-            setIsOnline(true);
-        } else {
-            setIsOnline(false);
+        } finally {
+            setIsInitialLoading(false);
         }
     };
     initServerSync();
@@ -355,9 +360,32 @@ const AppContent: React.FC = () => {
         setAppState(freshState);
     });
 
+    // Conflict handler: when server rejects our save due to newer data
+    const handleConflict = (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        if (detail?.serverData) {
+            const serverData = detail.serverData as AppState;
+            setAppState(currentState => {
+                if (!currentState) return serverData;
+                const mergedState = {
+                    ...serverData,
+                    currentUser: currentState.currentUser,
+                    theme: currentState.theme,
+                    llmConfig: currentState.llmConfig
+                };
+                localStorage.setItem('teamsync_data_v15', JSON.stringify(mergedState));
+                return mergedState;
+            });
+            setShowSyncToast(true);
+            setTimeout(() => setShowSyncToast(false), 4000);
+        }
+    };
+    window.addEventListener('teamsync_conflict', handleConflict);
+
     return () => {
         unsubscribe();
         clearInterval(intervalId);
+        window.removeEventListener('teamsync_conflict', handleConflict);
     };
   }, []);
 
@@ -418,8 +446,10 @@ const AppContent: React.FC = () => {
       applyTheme(newState.theme);
   };
 
-  const handleLogin = (user: User) => {
-      fetchFromServer().then(serverData => {
+  const handleLogin = async (user: User) => {
+      setIsInitialLoading(true);
+      try {
+          const serverData = await fetchFromServer();
           setAppState(currentState => {
               const baseData = serverData || currentState;
               if (!baseData) return null;
@@ -427,12 +457,16 @@ const AppContent: React.FC = () => {
               const newState = {
                   ...baseData,
                   currentUser: user,
+                  theme: currentState?.theme || 'light',
+                  llmConfig: currentState?.llmConfig || baseData.llmConfig,
                   lastUpdated: Date.now()
               };
               localStorage.setItem('teamsync_data_v15', JSON.stringify(newState));
               return newState;
           });
-      });
+      } finally {
+          setIsInitialLoading(false);
+      }
       setActiveTab('dashboard');
   }
 
@@ -754,10 +788,17 @@ const AppContent: React.FC = () => {
 
   // --- RENDER ---
 
-  if (!appState || !viewState) return <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">Loading Smart System...</div>;
+  if (!appState || !viewState) return <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="text-center"><RefreshCw className="w-8 h-8 animate-spin text-indigo-500 mx-auto mb-3" /><p className="text-gray-500 dark:text-gray-400 font-medium">Loading Smart System...</p></div></div>;
 
   if (!appState.currentUser) {
+      if (isInitialLoading) {
+          return <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="text-center"><RefreshCw className="w-8 h-8 animate-spin text-indigo-500 mx-auto mb-3" /><p className="text-gray-500 dark:text-gray-400 font-medium">Syncing with server...</p><p className="text-xs text-gray-400 mt-1">Ensuring latest data before login</p></div></div>;
+      }
       return <Login users={appState.users} onLogin={handleLogin} />;
+  }
+
+  if (isInitialLoading) {
+      return <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="text-center"><RefreshCw className="w-8 h-8 animate-spin text-indigo-500 mx-auto mb-3" /><p className="text-gray-500 dark:text-gray-400 font-medium">Syncing data...</p></div></div>;
   }
 
   const getPageTitle = () => {
@@ -830,7 +871,7 @@ const AppContent: React.FC = () => {
                     onClick={() => setIsPrjBotOpen(true)}
                     className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                 >
-                    <Cpu className="w-4 h-4" />
+                    <Bot className="w-4 h-4" />
                     PRJ Bot
                 </button>
 
@@ -877,7 +918,7 @@ const AppContent: React.FC = () => {
         {/* Content */}
         <div className="p-8">
             {activeTab === 'dashboard' && <KPIDashboard teams={viewState.teams} systemMessage={viewState.systemMessage} />}
-            {activeTab === 'management' && <ManagementDashboard teams={viewState.teams} users={viewState.users} reports={viewState.weeklyReports} meetings={viewState.meetings} workingGroups={viewState.workingGroups || []} llmConfig={appState.llmConfig} onUpdateReport={handleUpdateReport} onUpdateTeam={handleUpdateTeam} />}
+            {activeTab === 'management' && <ManagementDashboard teams={viewState.teams} users={viewState.users} reports={viewState.weeklyReports} meetings={viewState.meetings} workingGroups={viewState.workingGroups || []} llmConfig={appState.llmConfig} onUpdateReport={handleUpdateReport} onUpdateTeam={handleUpdateTeam} notifications={appState.notifications || []} currentUserId={appState.currentUser?.id || ''} onMarkNotificationSeen={handleMarkNotificationSeen} />}
             {activeTab === 'projects' && <ProjectTracker teams={viewState.teams} users={viewState.users} currentUser={appState.currentUser} llmConfig={appState.llmConfig} prompts={appState.prompts} onUpdateTeam={handleUpdateTeam} onDeleteProject={handleDeleteProject} onTransferProject={handleTransferProject} allTeams={appState.teams} allUsers={appState.users} />}
             {activeTab === 'book-of-work' && <BookOfWork teams={viewState.teams} users={viewState.users} onUpdateTeam={handleUpdateTeam} />}
             {activeTab === 'working-groups' && <WorkingGroupModule groups={viewState.workingGroups || []} users={viewState.users} teams={viewState.teams} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onUpdateGroup={handleUpdateGroup} onDeleteGroup={handleDeleteGroup} />}

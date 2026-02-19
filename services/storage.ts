@@ -124,21 +124,39 @@ export const saveState = (state: AppState) => {
   try {
     const timestamp = Date.now();
     const stateWithTimestamp = { ...state, lastUpdated: timestamp };
-    
+
     // 1. Sauvegarde Locale (Instantané) - Inclut currentUser pour F5
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateWithTimestamp));
     // Ensure version is set
     localStorage.setItem(VERSION_KEY, CURRENT_APP_VERSION);
-    
+
     // 2. Sauvegarde Serveur (Asynchrone / Fichier Central)
     // IMPORTANT: On retire currentUser et theme avant d'envoyer au serveur
     // pour ne pas écraser la session des autres utilisateurs.
     const { currentUser, theme, ...serverPayload } = stateWithTimestamp;
 
+    // Use X-Base-Version header for concurrency control
+    const baseVersion = String(state.lastUpdated || 0);
+
     fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Base-Version': baseVersion
+        },
         body: JSON.stringify(serverPayload)
+    }).then(async (response) => {
+        if (response.status === 409) {
+            // Conflict detected: another user saved since our last fetch
+            const conflictData = await response.json();
+            console.warn("[Conflict] Server has newer data. Triggering merge...");
+
+            // Dispatch a custom event so App.tsx can handle the conflict
+            const conflictEvent = new CustomEvent('teamsync_conflict', {
+                detail: { serverData: conflictData.serverData }
+            });
+            window.dispatchEvent(conflictEvent);
+        }
     }).catch(err => console.error("Échec sauvegarde serveur:", err));
 
     // 3. Notification inter-onglets
@@ -147,7 +165,7 @@ export const saveState = (state: AppState) => {
         newValue: JSON.stringify(stateWithTimestamp)
     });
     window.dispatchEvent(event);
-    
+
   } catch (e: any) {
     console.error("Erreur de sauvegarde", e);
     if (e.name === 'QuotaExceededError') {

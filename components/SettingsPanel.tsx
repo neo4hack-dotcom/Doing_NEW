@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AppState, LLMConfig, LLMProvider, User, UserRole, SystemMessage } from '../types';
 import { fetchOllamaModels, DEFAULT_PROMPTS, testConnection } from '../services/llmService';
 import { clearState } from '../services/storage';
-import { Save, RefreshCw, Cpu, Server, Key, Link, Download, Upload, Database, Settings, Lock, Trash2, AlertOctagon, MessageSquare, RotateCcw, FileJson, Workflow, CheckCircle2, XCircle, Merge, HardDrive, WifiOff, Search, Megaphone } from 'lucide-react';
+import { Save, RefreshCw, Bot, Server, Key, Link, Download, Upload, Database, Settings, Lock, Trash2, AlertOctagon, MessageSquare, RotateCcw, FileJson, Workflow, CheckCircle2, XCircle, Merge, HardDrive, WifiOff, Search, Megaphone } from 'lucide-react';
 
 interface SettingsPanelProps {
   config: LLMConfig;
