@@ -221,6 +221,63 @@ MANDATORY STRUCTURE:
 (If any action is BLOCKED or checklist item is URGENT).
 
 Tone: Action-oriented. English.
+`,
+    risk_assessment: `
+ACT AS: A Senior Risk Manager and Auditor.
+
+INPUT DATA:
+{{DATA}}
+
+MISSION:
+Detect HIGH RISKS linked to Projects (delays, blockers) or Resources (burnout, recurring issues, negative trend).
+
+CONSTRAINT:
+- If NO major risk is detected, output exactly: "No major risks detected."
+- If risks are detected, format them as a concise Markdown list.
+- Be very precise. Cite the Project or User concerned.
+- Use **Bold** for severity level (e.g. **CRITICAL**, **HIGH RISK**).
+
+Output Example:
+- **CRITICAL**: Project X is overdue and has blocked tasks since 3 weeks.
+- **HIGH RISK**: User Y reports Red status for 3 consecutive weeks. Burnout risk.
+`,
+    project_card: `
+You are a senior portfolio manager. Generate a comprehensive **Project Card** summarizing the selected projects.
+
+DATA:
+{{DATA}}
+
+EXPECTED FORMAT (Markdown):
+
+## 📊 Portfolio Overview
+A 2-3 sentence executive summary of the overall portfolio health and key themes.
+
+## 🏆 Key Achievements
+- Bullet list of completed work, milestones reached, and wins across all projects. Use **Bold** for highlights.
+
+## 🗺️ Roadmap & Next Steps
+- Bullet list of upcoming deliverables and planned work per project. Include ETAs when available.
+
+## ⚠️ Risks & Blockers
+- Bullet list of blocked tasks, overdue items, red external dependencies. Use **Bold** with "Critical", "Alert" for high-severity items.
+
+## 🔍 Attention Points
+- Functional and technical items requiring management attention. Mention stale projects, resource gaps, or dependency concerns.
+
+Be factual, structured, and actionable. Write in English.
+`,
+    document_synthesis: `
+Task: Generate a professional summary of the provided document or content.
+
+Content to analyze:
+{{DATA}}
+
+Mandatory Output Format (Bullet points):
+• Context: (What the document is about)
+• Key Takeaways: (Key info, numbers, decisions). Use **Bold** for numbers/wins.
+• Attention Points: (Risks, required actions). Use **Bold** with "Alert" or "Warning" for risks.
+
+Be creative but precise. Format response in clean Markdown. Answer in ENGLISH.
 `
 };
 
@@ -689,7 +746,7 @@ export const generateManagementInsight = async (teams: Team[], reports: WeeklyRe
     return runPrompt(prompt, config, [], language);
 }
 
-export const generateRiskAssessment = async (teams: Team[], reports: WeeklyReport[], users: User[], config: LLMConfig, language?: 'fr' | 'en'): Promise<string> => {
+export const generateRiskAssessment = async (teams: Team[], reports: WeeklyReport[], users: User[], config: LLMConfig, language?: 'fr' | 'en', customPrompts?: Record<string, string>): Promise<string> => {
     const projectContext = teams.flatMap(t => t.projects.map(p => {
         const context = (p.additionalDescriptions || []).join(' ');
         const blockedTasks = p.tasks.filter(task => task.status === TaskStatus.BLOCKED).map(t => t.title).join(', ');
@@ -709,7 +766,7 @@ export const generateRiskAssessment = async (teams: Team[], reports: WeeklyRepor
     const userReportsContext = Object.keys(reportsByUser).map(userId => {
         const u = users.find(user => user.id === userId);
         const last3 = reportsByUser[userId].sort((a,b) => new Date(b.weekOf).getTime() - new Date(a.weekOf).getTime()).slice(0, 3);
-        
+
         return `
         User: ${u?.firstName} ${u?.lastName}
         Last Reports:
@@ -717,29 +774,9 @@ export const generateRiskAssessment = async (teams: Team[], reports: WeeklyRepor
         `;
     }).join('\n');
 
-    const prompt = `
-    ACT AS: A Senior Risk Manager and Auditor.
-    
-    INPUT DATA:
-    --- PROJECTS STATUS & CONTEXT ---
-    ${projectContext}
-    
-    --- USER REPORTS (LAST 3 WEEKS) ---
-    ${userReportsContext}
-
-    MISSION:
-    Detect HIGH RISKS linked to Projects (delays, blockers) or Resources (burnout, recurring issues, negative trend).
-    
-    CONSTRAINT:
-    - If NO major risk is detected, output exactly: "No major risks detected."
-    - If risks are detected, format them as a concise Markdown list.
-    - Be very precise. Cite the Project or User concerned.
-    - Use **Bold** for severity level (e.g. **CRITICAL**, **HIGH RISK**).
-
-    Output Example:
-    - **CRITICAL**: Project X is overdue and has blocked tasks since 3 weeks.
-    - **HIGH RISK**: User Y reports Red status for 3 consecutive weeks. Burnout risk.
-    `;
+    const combinedData = `--- PROJECTS STATUS & CONTEXT ---\n${projectContext}\n\n--- USER REPORTS (LAST 3 WEEKS) ---\n${userReportsContext}`;
+    const template = customPrompts?.['risk_assessment'] || DEFAULT_PROMPTS.risk_assessment;
+    const prompt = fillTemplate(template, { DATA: combinedData });
     return runPrompt(prompt, config, [], language);
 }
 
@@ -779,7 +816,7 @@ export const sendChatMessage = async (history: ChatMessage[], newPrompt: string,
     return runPrompt(fullPrompt, config, images);
 };
 
-export const generateProjectCard = async (projects: Project[], users: User[], config: LLMConfig, language?: 'fr' | 'en'): Promise<string> => {
+export const generateProjectCard = async (projects: Project[], users: User[], config: LLMConfig, language?: 'fr' | 'en', customPrompts?: Record<string, string>): Promise<string> => {
     const projectData = projects.map(p => {
         const tasks = p.tasks.map(t => ({
             title: t.title,
@@ -802,50 +839,14 @@ export const generateProjectCard = async (projects: Project[], users: User[], co
         };
     });
 
-    const prompt = `
-You are a senior portfolio manager. Generate a comprehensive **Project Card** summarizing the selected projects.
-
-DATA:
-${JSON.stringify(projectData, null, 2)}
-
-EXPECTED FORMAT (Markdown):
-
-## 📊 Portfolio Overview
-A 2-3 sentence executive summary of the overall portfolio health and key themes.
-
-## 🏆 Key Achievements
-- Bullet list of completed work, milestones reached, and wins across all projects. Use **Bold** for highlights.
-
-## 🗺️ Roadmap & Next Steps
-- Bullet list of upcoming deliverables and planned work per project. Include ETAs when available.
-
-## ⚠️ Risks & Blockers
-- Bullet list of blocked tasks, overdue items, red external dependencies. Use **Bold** with "Critical", "Alert" for high-severity items.
-
-## 🔍 Attention Points
-- Functional and technical items requiring management attention. Mention stale projects, resource gaps, or dependency concerns.
-
-Be factual, structured, and actionable. Write in English.
-`;
-
+    const template = customPrompts?.['project_card'] || DEFAULT_PROMPTS.project_card;
+    const prompt = fillTemplate(template, { DATA: JSON.stringify(projectData, null, 2) });
     return runPrompt(prompt, config, [], language);
 };
 
-export const generateDocumentSynthesis = async (contentOrDescription: string, config: LLMConfig, language?: 'fr' | 'en'): Promise<string> => {
-    const prompt = `
-    Task: Generate a professional summary of the provided document or content.
-    
-    Content to analyze:
-    ${contentOrDescription}
-    
-    Mandatory Output Format (Bullet points):
-    • Context: (What the document is about)
-    • Key Takeaways: (Key info, numbers, decisions). Use **Bold** for numbers/wins.
-    • Attention Points: (Risks, required actions). Use **Bold** with "Alert" or "Warning" for risks.
-    
-    Be creative but precise. Format response in clean Markdown. Answer in ENGLISH.
-    `;
-
+export const generateDocumentSynthesis = async (contentOrDescription: string, config: LLMConfig, language?: 'fr' | 'en', customPrompts?: Record<string, string>): Promise<string> => {
+    const template = customPrompts?.['document_synthesis'] || DEFAULT_PROMPTS.document_synthesis;
+    const prompt = fillTemplate(template, { DATA: contentOrDescription });
     return runPrompt(prompt, config, [], language);
 }
 

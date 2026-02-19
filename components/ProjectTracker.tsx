@@ -248,7 +248,7 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ teams, users, currentUs
               ? visibleProjects.filter(p => selectedProjectIds.includes(p.id))
               : visibleProjects;
 
-          const card = await generateProjectCard(projectsToAnalyze, users, llmConfig, lang);
+          const card = await generateProjectCard(projectsToAnalyze, users, llmConfig, lang, prompts);
           setAiProjectCard(card);
           setLoadingProjectCard(false);
       });
