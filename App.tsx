@@ -12,6 +12,7 @@ import ManagementDashboard from './components/ManagementDashboard';
 import Login from './components/Login';
 import AIChatSidebar from './components/AIChatSidebar';
 import PRJBotSidebar from './components/PRJBotSidebar';
+import RAGChatSidebar from './components/RAGChatSidebar';
 import NotificationPanel from './components/NotificationPanel';
 import WorkingGroupModule from './components/WorkingGroup';
 
@@ -292,6 +293,9 @@ const AppContent: React.FC = () => {
 
   // PRJ Bot Sidebar
   const [isPrjBotOpen, setIsPrjBotOpen] = useState(false);
+
+  // RAG Chat Sidebar
+  const [isRagOpen, setIsRagOpen] = useState(false);
 
   // Notification Panel
   const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
@@ -836,6 +840,17 @@ const AppContent: React.FC = () => {
         onUpdateTeam={handleUpdateTeam}
       />
 
+      <RAGChatSidebar
+        isOpen={isRagOpen}
+        onClose={() => setIsRagOpen(false)}
+        llmConfig={appState.llmConfig}
+        teams={viewState.teams}
+        meetings={viewState.meetings}
+        weeklyReports={viewState.weeklyReports}
+        workingGroups={viewState.workingGroups || []}
+        users={viewState.users}
+      />
+
       <Sidebar
         currentUser={appState.currentUser}
         activeTab={activeTab}
@@ -873,6 +888,15 @@ const AppContent: React.FC = () => {
                 >
                     <Bot className="w-4 h-4" />
                     PRJ Bot
+                </button>
+
+                {/* RAG Button */}
+                <button
+                    onClick={() => setIsRagOpen(true)}
+                    className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+                >
+                    <Bot className="w-4 h-4" />
+                    RAG
                 </button>
 
                 <div className="h-6 w-px bg-gray-200 dark:bg-gray-700"></div>

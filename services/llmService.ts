@@ -975,6 +975,108 @@ Required JSON structure:
     }
 };
 
+export const extractMeetingFromText = async (text: string, config: LLMConfig): Promise<{
+    title: string;
+    date: string;
+    attendees: string[];
+    minutes: string;
+    decisions: string[];
+    actionItems: { description: string; owner: string; dueDate: string }[];
+}> => {
+    const today = new Date().toISOString().split('T')[0];
+    const prompt = `
+You are a Meeting Extraction Assistant. Analyze the following text (which may come from an email, a presentation, meeting notes, or any description) and extract structured meeting information.
+
+TEXT TO ANALYZE:
+${text}
+
+CRITICAL RULES:
+1. Extract ONLY information that is explicitly present in the text. Do NOT invent or hallucinate any data.
+2. If a field cannot be determined from the text, leave it as an empty string "" or empty array [].
+3. For attendees, extract names or email addresses of people mentioned.
+4. For decisions, extract clear decisions or conclusions reached.
+5. For action items, extract tasks with their owner (if mentioned) and due date (if mentioned).
+6. Dates should be in YYYY-MM-DD format if found. Otherwise "".
+7. Today's date is ${today} - use this as a reference for relative dates.
+
+RETURN ONLY A VALID JSON OBJECT. NO MARKDOWN. NO CODE BLOCKS. NO EXPLANATION.
+
+Required JSON structure:
+{
+  "title": "Meeting title extracted from text",
+  "date": "",
+  "attendees": ["Name 1", "Name 2"],
+  "minutes": "A concise summary of the discussion content",
+  "decisions": ["Decision 1", "Decision 2"],
+  "actionItems": [
+    { "description": "Action description", "owner": "", "dueDate": "" }
+  ]
+}
+`;
+
+    const rawResponse = await runPrompt(prompt, config);
+
+    try {
+        const cleanJson = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        return {
+            title: parsed.title || '',
+            date: parsed.date || today,
+            attendees: Array.isArray(parsed.attendees) ? parsed.attendees.map((a: any) => String(a)) : [],
+            minutes: parsed.minutes || '',
+            decisions: Array.isArray(parsed.decisions) ? parsed.decisions.map((d: any) => String(d)) : [],
+            actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems.map((a: any) => ({
+                description: a.description || '',
+                owner: a.owner || '',
+                dueDate: a.dueDate || '',
+            })) : [],
+        };
+    } catch (e) {
+        console.error("Failed to parse meeting extraction JSON", rawResponse);
+        return {
+            title: '',
+            date: today,
+            attendees: [],
+            minutes: rawResponse,
+            decisions: [],
+            actionItems: [],
+        };
+    }
+};
+
+export const ragQuery = async (
+    question: string,
+    context: string,
+    history: { role: 'user' | 'assistant'; content: string }[],
+    config: LLMConfig
+): Promise<string> => {
+    const historyText = history.length > 0
+        ? history.map(m => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}: ${m.content}`).join('\n')
+        : '';
+
+    const prompt = `
+You are a RAG (Retrieval-Augmented Generation) assistant integrated into a project management tool called DOINg.
+You have been provided with relevant data extracted from the application database.
+
+RELEVANT DATA FROM DATABASE:
+${context}
+
+${historyText ? `CONVERSATION HISTORY:\n${historyText}\n` : ''}
+USER QUESTION: ${question}
+
+CRITICAL RULES:
+1. Answer ONLY based on the data provided above. Do NOT invent, assume, or hallucinate any information.
+2. If the data does not contain enough information to answer, say so clearly.
+3. Format your answer in clear, well-structured Markdown.
+4. Use **Bold** for key entities (names, project names, dates, statuses).
+5. Use bullet points for lists of items.
+6. Be precise, factual, and concise.
+7. If multiple data sources are relevant, synthesize them coherently.
+`;
+
+    return runPrompt(prompt, config);
+};
+
 export const fetchOllamaModels = async (baseUrl: string): Promise<string[]> => {
   try {
     const url = baseUrl || 'http://localhost:11434';

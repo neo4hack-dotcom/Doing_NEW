@@ -4,7 +4,8 @@ import { Meeting, ActionItem, ActionItemStatus, Team, User, LLMConfig } from '..
 import { generateMeetingSummary } from '../services/llmService';
 import LanguagePickerModal from './LanguagePickerModal';
 import FormattedText from './FormattedText';
-import { Plus, Calendar, User as UserIcon, CheckSquare, Trash2, Save, FileText, BookOpen, Mail, X, Copy, Loader2, Folder, Briefcase, Download, UserPlus, Gavel } from 'lucide-react';
+import AIMeetingBotSidebar from './AIMeetingBotSidebar';
+import { Plus, Calendar, User as UserIcon, CheckSquare, Trash2, Save, FileText, BookOpen, Mail, X, Copy, Loader2, Folder, Briefcase, Download, UserPlus, Gavel, Bot } from 'lucide-react';
 
 interface MeetingManagerProps {
   meetings: Meeting[];
@@ -41,6 +42,17 @@ const MeetingManager: React.FC<MeetingManagerProps> = ({ meetings, teams, users,
 
   // State for new Decision
   const [newDecisionText, setNewDecisionText] = useState('');
+
+  // AI Meeting Bot sidebar
+  const [isAIMeetingBotOpen, setIsAIMeetingBotOpen] = useState(false);
+
+  const handleBotMeetingSave = (meeting: Meeting) => {
+    onUpdateMeeting(meeting);
+    setIsAIMeetingBotOpen(false);
+    // Navigate to the newly created meeting
+    setSelectedMeetingId(meeting.id);
+    setEditMeeting({ ...meeting, decisions: meeting.decisions || [] });
+  };
 
   const initialMeetingState: Meeting = {
     id: '',
@@ -213,6 +225,15 @@ const MeetingManager: React.FC<MeetingManagerProps> = ({ meetings, teams, users,
           onSelect={handleLanguageSelected}
       />
 
+      <AIMeetingBotSidebar
+          isOpen={isAIMeetingBotOpen}
+          onClose={() => setIsAIMeetingBotOpen(false)}
+          llmConfig={llmConfig}
+          teams={teams}
+          users={users}
+          onSaveMeeting={handleBotMeetingSave}
+      />
+
       {/* Summary Modal */}
       {showSummaryModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -274,13 +295,23 @@ const MeetingManager: React.FC<MeetingManagerProps> = ({ meetings, teams, users,
       <div className="w-full lg:w-1/3 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800">
             <h3 className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2"><Folder className="w-5 h-5"/> Archives</h3>
-            <button 
-                onClick={() => handleSelectMeeting('new')}
-                className="flex items-center text-xs bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-                <Plus className="w-4 h-4 mr-1" />
-                New
-            </button>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => setIsAIMeetingBotOpen(true)}
+                    className="flex items-center text-xs bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white px-3 py-2 rounded-lg transition-colors shadow-sm"
+                    title="Create meeting from text/document using AI"
+                >
+                    <Bot className="w-4 h-4 mr-1" />
+                    AI Meetings
+                </button>
+                <button
+                    onClick={() => handleSelectMeeting('new')}
+                    className="flex items-center text-xs bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                    <Plus className="w-4 h-4 mr-1" />
+                    New
+                </button>
+            </div>
         </div>
         <div className="overflow-y-auto flex-1 p-4 space-y-[-8px]">
             {meetings.map((m, idx) => {
@@ -297,9 +328,16 @@ const MeetingManager: React.FC<MeetingManagerProps> = ({ meetings, teams, users,
                         `}
                         style={{ zIndex: isSelected ? 50 : meetings.length - idx }}
                     >
-                        <div className="flex justify-between mb-1 items-center">
+                        <div className="flex justify-between mb-1 items-center gap-1">
                             <span className={`font-bold truncate ${isSelected ? 'text-indigo-700 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400'}`}>{m.title}</span>
-                            <span className="text-xs font-mono opacity-70">{m.date}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                                {m.createdByBot && (
+                                    <span title="Created by AI Bot" className="inline-flex items-center justify-center w-4 h-4 bg-violet-500 text-white rounded-full">
+                                        <Bot className="w-2.5 h-2.5" />
+                                    </span>
+                                )}
+                                <span className="text-xs font-mono opacity-70">{m.date}</span>
+                            </div>
                         </div>
                         <div className="flex items-center text-xs opacity-80 gap-2">
                             <span className="flex items-center"><FileText className="w-3 h-3 mr-1" /> {teamName || 'No Team'}</span>
