@@ -298,7 +298,7 @@ const WorkingGroupModule: React.FC<WorkingGroupProps> = ({ groups, users, teams,
             setAiModalTitle(`Deep Analysis: ${selectedGroup.title}`);
             setShowAiModal(true);
 
-            const report = await generateWorkingGroupFullReport(selectedGroup, teams, users, llmConfig, lang);
+            const report = await generateWorkingGroupFullReport(selectedGroup, teams, users, llmConfig, undefined, lang);
             setAiContent(report);
             setIsAiLoading(false);
         });
@@ -313,7 +313,7 @@ const WorkingGroupModule: React.FC<WorkingGroupProps> = ({ groups, users, teams,
             setAiModalTitle(`Session Summary: ${selectedGroup.title}`);
             setShowAiModal(true);
 
-            const report = await generateWorkingGroupSessionReport(selectedGroup, teams, users, llmConfig, lang);
+            const report = await generateWorkingGroupSessionReport(selectedGroup, teams, users, llmConfig, undefined, lang);
             setAiContent(report);
             setIsAiLoading(false);
         });

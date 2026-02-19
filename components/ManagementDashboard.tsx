@@ -6,7 +6,7 @@ import { Briefcase, CheckCircle2, ShieldAlert, Zap, LayoutList, Bell, Eye, Clipb
 
 import LanguagePickerModal from './LanguagePickerModal';
 import ManagementStats from './management/ManagementStats';
-import TeamPortfolio from './management/TeamPortfolio';
+import StaleProjectTracker from './management/StaleProjectTracker';
 import TeamProjectList from './management/TeamProjectList';
 import QuickCreateModal from './management/QuickCreateModal';
 import ReviewReportModal from './management/ReviewReportModal';
@@ -81,7 +81,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users,
               projects: t.projects.filter(p => !p.isArchived)
           }));
 
-          const insight = await generateManagementInsight(activeTeams, reports, users, llmConfig, lang);
+          const insight = await generateManagementInsight(activeTeams, reports, users, llmConfig, undefined, lang);
           setAiInsight(insight);
           setIsAiLoading(false);
       });
@@ -187,8 +187,17 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users,
             reports={reports}
         />
 
-        {/* TEAM PORTFOLIO OVERVIEW */}
-        <TeamPortfolio teams={teams} />
+        {/* STALE & URGENT PROJECT TRACKER */}
+        <div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                Projects Requiring Attention
+                <span className="text-sm font-normal text-slate-500 dark:text-slate-400 ml-1">
+                    — stale (&gt;2 weeks no update) or deadline within 1 week
+                </span>
+            </h3>
+            <StaleProjectTracker teams={teams} />
+        </div>
 
         {/* TEAM PROJECT LIST (Detailed View) */}
         <div>
