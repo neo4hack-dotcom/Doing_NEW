@@ -15,9 +15,10 @@ import PRJBotSidebar from './components/PRJBotSidebar';
 import RAGChatSidebar from './components/RAGChatSidebar';
 import NotificationPanel from './components/NotificationPanel';
 import WorkingGroupModule from './components/WorkingGroup';
+import SmartTodoManager from './components/SmartTodoManager';
 
 import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer, generateId, sanitizeAppState } from './services/storage';
-import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage, AppNotification } from './types';
+import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage, AppNotification, SmartTodo } from './types';
 import { Bell, Sun, Moon, Bot, RefreshCw, Cloud, CloudOff } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -81,9 +82,13 @@ const getSubordinateIds = (rootId: string, allUsers: User[]): string[] => {
 };
 
 const getFilteredState = (state: AppState): AppState => {
+    // SmartTodos are always private — each user sees only their own
+    const myTodos = (state.smartTodos || []).filter(t => t.userId === state.currentUser?.id);
+
     if (!state.currentUser || state.currentUser.role === UserRole.ADMIN) {
         return {
             ...state,
+            smartTodos: myTodos,
             workingGroups: state.workingGroups || [],
             notifications: state.notifications || [],
             dismissedAlerts: state.dismissedAlerts || {},
@@ -143,6 +148,7 @@ const getFilteredState = (state: AppState): AppState => {
         weeklyReports: filteredReports,
         meetings: filteredMeetings,
         workingGroups: filteredGroups,
+        smartTodos: myTodos,
         notifications: state.notifications || [],
         dismissedAlerts: state.dismissedAlerts || {}
     };
@@ -768,6 +774,15 @@ const AppContent: React.FC = () => {
   });
   const handleDeleteGroup = createHandler((curr, id: string) => ({...curr, workingGroups: (curr.workingGroups || []).filter(g => g.id !== id)}));
 
+  const handleSaveTodo = createHandler((curr, todo: SmartTodo) => {
+      const todos = curr.smartTodos || [];
+      const idx = todos.findIndex(t => t.id === todo.id);
+      const newTodos = [...todos];
+      if (idx >= 0) newTodos[idx] = todo; else newTodos.push(todo);
+      return { ...curr, smartTodos: newTodos };
+  });
+  const handleDeleteTodo = createHandler((curr, id: string) => ({...curr, smartTodos: (curr.smartTodos || []).filter(t => t.id !== id)}));
+
   const handleUpdateLLMConfig = (config: LLMConfig, prompts?: Record<string, string>) => {
       const newState = updateAppState(curr => ({...curr, llmConfig: config, prompts: prompts || curr.prompts}));
       setAppState(newState);
@@ -952,6 +967,7 @@ const AppContent: React.FC = () => {
             {activeTab === 'working-groups' && <WorkingGroupModule groups={viewState.workingGroups || []} users={viewState.users} teams={viewState.teams} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onUpdateGroup={handleUpdateGroup} onDeleteGroup={handleDeleteGroup} />}
             {activeTab === 'weekly-report' && <WeeklyReport reports={viewState.weeklyReports} users={viewState.users} teams={viewState.teams} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onSaveReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />}
             {activeTab === 'meetings' && <MeetingManager meetings={viewState.meetings} teams={viewState.teams} users={viewState.users} llmConfig={appState.llmConfig} onUpdateMeeting={handleUpdateMeeting} onDeleteMeeting={handleDeleteMeeting} />}
+            {activeTab === 'smart-todo' && appState.currentUser && <SmartTodoManager todos={viewState.smartTodos || []} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onSaveTodo={handleSaveTodo} onDeleteTodo={handleDeleteTodo} />}
             {activeTab === 'admin-users' && <AdminPanel users={appState.users} teams={appState.teams} onAddUser={handleAddUser} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onAddTeam={handleAddTeam} onUpdateTeam={handleUpdateTeam} onDeleteTeam={handleDeleteTeam} />}
             {activeTab === 'settings' && <SettingsPanel config={appState.llmConfig} appState={appState} onSave={handleUpdateLLMConfig} onImport={handleImportState} onUpdateUserPassword={handleUpdateUserPassword} onUpdateSystemMessage={handleUpdateSystemMessage} />}
         </div>
