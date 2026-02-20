@@ -1,5 +1,5 @@
 
-import { User, Team, Meeting, UserRole, TaskStatus, TaskPriority, ProjectStatus, ProjectRole, ActionItemStatus, AppState, LLMConfig, WeeklyReport, AppNotification, WorkingGroup } from '../types';
+import { User, Team, Meeting, UserRole, TaskStatus, TaskPriority, ProjectStatus, ProjectRole, ActionItemStatus, AppState, LLMConfig, WeeklyReport, AppNotification, WorkingGroup, SmartTodo } from '../types';
 
 const STORAGE_KEY = 'teamsync_data_v15';
 const VERSION_KEY = 'teamsync_app_version';
@@ -32,6 +32,7 @@ export const sanitizeAppState = (data: any): AppState => {
         meetings: Array.isArray(data.meetings) ? data.meetings : [],
         weeklyReports: Array.isArray(data.weeklyReports) ? data.weeklyReports : [],
         workingGroups: Array.isArray(data.workingGroups) ? data.workingGroups : [],
+        smartTodos: Array.isArray(data.smartTodos) ? data.smartTodos : [],
         notifications: Array.isArray(data.notifications) ? data.notifications : [],
         dismissedAlerts: data.dismissedAlerts && typeof data.dismissedAlerts === 'object' ? data.dismissedAlerts : {},
         systemMessage: data.systemMessage || { active: false, content: '', level: 'info' },
@@ -144,10 +145,11 @@ const getDefaultState = (): AppState => {
         meetings: [],
         weeklyReports: [],
         workingGroups: [],
+        smartTodos: [],
         notifications: [],
         dismissedAlerts: {},
         systemMessage: { active: false, content: '', level: 'info' },
-        currentUser: null, 
+        currentUser: null,
         theme: 'light',
         llmConfig: DEFAULT_LLM_CONFIG,
         prompts: {},

@@ -226,6 +226,43 @@ export interface WorkingGroup {
   archived: boolean;
 }
 
+// --- SMART TODO TYPES ---
+
+export type TodoStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
+export type TodoPriorityLevel = 'low' | 'medium' | 'high' | 'urgent';
+export type EnergyLevel = 'low' | 'medium' | 'high';
+
+export interface TodoAttachment {
+  name: string;
+  url: string;
+}
+
+export interface SmartTodo {
+  id: string;
+  userId: string; // Private per-user — only visible to the owner
+  createdAt: string;
+  updatedAt: string;
+  source: string; // "Email", "Meeting", "Manual", "Bot", etc.
+  requester: string;
+  isRecurring: boolean;
+  recurrenceRule: string | null;
+  createdByBot?: boolean; // Visual indicator icon — read-only
+  title: string;
+  description: string;
+  tags: string[];
+  attachments: TodoAttachment[];
+  links: string[];
+  status: TodoStatus;
+  priorityLevel: TodoPriorityLevel;
+  eisenhowerQuadrant: 1 | 2 | 3 | 4 | null; // Q1=Do Now, Q2=Schedule, Q3=Delegate, Q4=Eliminate
+  energyRequired: EnergyLevel;
+  estimatedDurationMin: number | null;
+  actualTimeSpentMin: number | null;
+  startDate: string | null;
+  dueDate: string | null;
+  completedAt: string | null;
+}
+
 // --- NOTIFICATION TYPES ---
 export type NotificationType =
   | 'project_created' | 'project_updated'
@@ -259,6 +296,7 @@ export interface AppState {
   meetings: Meeting[];
   weeklyReports: WeeklyReport[];
   workingGroups: WorkingGroup[];
+  smartTodos: SmartTodo[];
   notifications: AppNotification[];
   dismissedAlerts: { [key: string]: string }; // key -> ISO date of dismissal, per-user stored locally
   systemMessage?: SystemMessage;

@@ -1078,6 +1078,115 @@ CRITICAL RULES:
     return runPrompt(prompt, config);
 };
 
+export const extractTodoFromText = async (text: string, config: LLMConfig): Promise<{
+    title: string;
+    description: string;
+    source: string;
+    requester: string;
+    tags: string[];
+    links: string[];
+    priorityLevel: string;
+    eisenhowerQuadrant: number | null;
+    energyRequired: string;
+    estimatedDurationMin: number | null;
+    startDate: string;
+    dueDate: string;
+    isRecurring: boolean;
+    recurrenceRule: string;
+    actionItems: { description: string; owner: string; dueDate: string }[];
+}> => {
+    const today = new Date().toISOString().split('T')[0];
+    const prompt = `
+You are a Smart To-Do Extraction Assistant. Analyze the following text (which may come from an email, a presentation, meeting notes, or any description) and extract structured to-do task information.
+
+TEXT TO ANALYZE:
+${text}
+
+CRITICAL RULES:
+1. Extract ONLY information that is explicitly present in the text. Do NOT invent or hallucinate any data.
+2. If a field cannot be determined from the text, leave it as an empty string "", null, or empty array [].
+3. For priorityLevel, use only: "low", "medium", "high", or "urgent". If not determinable, use "".
+4. For eisenhowerQuadrant: 1=Urgent+Important(Do Now), 2=Not Urgent+Important(Schedule), 3=Urgent+Not Important(Delegate), 4=Not Urgent+Not Important(Eliminate). Use null if not determinable.
+5. For energyRequired, use only: "low", "medium", or "high". If not determinable, use "".
+6. Dates should be in YYYY-MM-DD format if found. Otherwise "".
+7. For estimatedDurationMin, extract numeric minutes if a duration is mentioned (e.g., "2 hours" = 120). Use null if not found.
+8. For actionItems, extract any sub-tasks, deliverables, or actions assigned to specific people.
+9. For tags, extract relevant keywords, topics, or categories from the text.
+10. For source, infer the type of document: "Email", "Meeting", "Presentation", "Message", "Note", "Other".
+11. Today's date is ${today}.
+
+RETURN ONLY A VALID JSON OBJECT. NO MARKDOWN. NO CODE BLOCKS. NO EXPLANATION.
+
+Required JSON structure:
+{
+  "title": "Main task title extracted from text",
+  "description": "A concise summary of the task or subject",
+  "source": "",
+  "requester": "",
+  "tags": ["tag1", "tag2"],
+  "links": ["https://..."],
+  "priorityLevel": "",
+  "eisenhowerQuadrant": null,
+  "energyRequired": "",
+  "estimatedDurationMin": null,
+  "startDate": "",
+  "dueDate": "",
+  "isRecurring": false,
+  "recurrenceRule": "",
+  "actionItems": [
+    { "description": "Sub-task description", "owner": "", "dueDate": "" }
+  ]
+}
+`;
+
+    const rawResponse = await runPrompt(prompt, config);
+
+    try {
+        const cleanJson = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        return {
+            title: parsed.title || '',
+            description: parsed.description || '',
+            source: parsed.source || '',
+            requester: parsed.requester || '',
+            tags: Array.isArray(parsed.tags) ? parsed.tags.map((t: any) => String(t)) : [],
+            links: Array.isArray(parsed.links) ? parsed.links.map((l: any) => String(l)) : [],
+            priorityLevel: parsed.priorityLevel || '',
+            eisenhowerQuadrant: parsed.eisenhowerQuadrant != null ? Number(parsed.eisenhowerQuadrant) : null,
+            energyRequired: parsed.energyRequired || '',
+            estimatedDurationMin: parsed.estimatedDurationMin != null ? Number(parsed.estimatedDurationMin) : null,
+            startDate: parsed.startDate || '',
+            dueDate: parsed.dueDate || '',
+            isRecurring: parsed.isRecurring === true,
+            recurrenceRule: parsed.recurrenceRule || '',
+            actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems.map((a: any) => ({
+                description: a.description || '',
+                owner: a.owner || '',
+                dueDate: a.dueDate || '',
+            })) : [],
+        };
+    } catch (e) {
+        console.error("Failed to parse todo extraction JSON", rawResponse);
+        return {
+            title: '',
+            description: rawResponse,
+            source: '',
+            requester: '',
+            tags: [],
+            links: [],
+            priorityLevel: '',
+            eisenhowerQuadrant: null,
+            energyRequired: '',
+            estimatedDurationMin: null,
+            startDate: '',
+            dueDate: '',
+            isRecurring: false,
+            recurrenceRule: '',
+            actionItems: [],
+        };
+    }
+};
+
 export const fetchOllamaModels = async (baseUrl: string): Promise<string[]> => {
   try {
     const url = baseUrl || 'http://localhost:11434';
