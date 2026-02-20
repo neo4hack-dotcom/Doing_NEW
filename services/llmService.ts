@@ -1,7 +1,9 @@
 
 import { Team, User, TaskStatus, LLMConfig, Meeting, WeeklyReport, ChatMessage, Project, WorkingGroup, ActionItemStatus } from "../types";
 
-// --- DEFAULT PROMPTS ---
+// --- PROMPTS PAR DÉFAUT ---
+// Chaque prompt correspond à un cas d'usage spécifique (rapports, réunions, etc.)
+// Les variables {{DATA}} et {{TITLE}} seront remplacées dynamiquement
 
 export const DEFAULT_PROMPTS = {
     team_report: `
@@ -281,9 +283,11 @@ Be creative but precise. Format response in clean Markdown. Answer in ENGLISH.
 `
 };
 
-// --- Utility Functions for Data Preparation ---
+// --- FONCTIONS UTILITAIRES DE PRÉPARATION DES DONNÉES ---
+// Ces fonctions formatent les données pour les envoyer aux modèles LLM
 
 const prepareTeamData = (team: Team, manager: User | undefined): string => {
+  // Prépare les données d'une équipe avec ses projets et tâches pour l'IA
   const projectSummaries = team.projects.map(p => {
     const totalTasks = p.tasks.length;
     const closed = p.tasks.filter(t => t.status === TaskStatus.DONE).length;
@@ -314,6 +318,7 @@ const prepareTeamData = (team: Team, manager: User | undefined): string => {
 };
 
 const prepareProjectDetailData = (project: Project, users: User[]): string => {
+    // Extrait les données détaillées d'un projet (tâches, dépendances, etc.)
     const managerName = users.find(u => u.id === project.managerId)?.lastName || 'Unassigned';
     
     const contextLayers = (project.additionalDescriptions || [])
@@ -510,8 +515,9 @@ const fillTemplate = (template: string, replacements: Record<string, string>) =>
     return result;
 }
 
-// --- Internal Helper Functions ---
+// --- FONCTIONS INTERNES D'AIDE ---
 
+// Construit le contexte de conversation à partir de l'historique des messages
 const buildChatContext = (history: ChatMessage[]): string => {
     return history.map(msg => {
         const attachmentInfo = msg.attachments && msg.attachments.length > 0 
@@ -521,8 +527,9 @@ const buildChatContext = (history: ChatMessage[]): string => {
     }).join('\n');
 };
 
+// Appel au modèle local Ollama
 const callOllama = async (prompt: string, config: LLMConfig, images: string[] = []): Promise<string> => {
-    // 100% Local Call
+    // Appel local 100% - pas de données envoyées à l'extérieur
     const url = `${config.baseUrl || 'http://localhost:11434'}/api/generate`;
     const body: any = {
         model: config.model || 'llama3',
@@ -548,8 +555,9 @@ const callOllama = async (prompt: string, config: LLMConfig, images: string[] = 
     return data.response;
 };
 
+// Appel via endpoint HTTP local compatible OpenAI (LocalAI, LM Studio, etc.)
 const callLocalHttp = async (prompt: string, config: LLMConfig): Promise<string> => {
-    // OpenAI-compatible endpoint format (for LocalAI, LM Studio, etc.) - STRICTLY LOCAL
+    // Format compatible OpenAI - STRICTEMENT LOCAL
     const url = config.baseUrl || 'http://localhost:8000/v1/chat/completions';
     
     const headers: Record<string, string> = {
@@ -577,6 +585,7 @@ const callLocalHttp = async (prompt: string, config: LLMConfig): Promise<string>
     return data.choices?.[0]?.message?.content || data.content || JSON.stringify(data);
 };
 
+// Appel via webhook N8N pour l'automatisation
 const callN8n = async (prompt: string, config: LLMConfig): Promise<string> => {
     const url = config.baseUrl;
     if (!url) throw new Error("N8N Webhook URL is missing");
@@ -607,8 +616,10 @@ const callN8n = async (prompt: string, config: LLMConfig): Promise<string> => {
     return data.output || data.text || data.response || data.content || JSON.stringify(data);
 };
 
-// --- Public API ---
+// --- API PUBLIQUE ---
+// Fonctions exportées pour la génération de rapports et l'interaction avec l'IA
 
+// Teste la connexion au fournisseur LLM configuré
 export const testConnection = async (config: LLMConfig): Promise<boolean> => {
     try {
         const pingPrompt = "Hello, are you online? Respond with 'Yes'.";
@@ -627,14 +638,18 @@ export const testConnection = async (config: LLMConfig): Promise<boolean> => {
     }
 };
 
+// Génère un rapport d'équipe via l'IA
 export const generateTeamReport = async (team: Team, manager: User | undefined, config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
+  // Prépare les données de l'équipe et injecte dans le prompt
   const data = prepareTeamData(team, manager);
   const template = customPrompts?.['team_report'] || DEFAULT_PROMPTS.team_report;
   const prompt = fillTemplate(template, { DATA: data });
   return runPrompt(prompt, config, [], language);
 };
 
+// Génère une feuille de route de projet avec phases et jalons
 export const generateProjectRoadmap = async (project: Project, users: User[], config: LLMConfig, customPrompts?: Record<string, string>, language?: 'fr' | 'en'): Promise<string> => {
+    // Extrait les données détaillées du projet
     const data = prepareProjectDetailData(project, users);
     const template = customPrompts?.['project_roadmap'] || DEFAULT_PROMPTS.project_roadmap;
     const prompt = fillTemplate(template, { DATA: data });
@@ -850,39 +865,45 @@ export const generateDocumentSynthesis = async (contentOrDescription: string, co
     return runPrompt(prompt, config, [], language);
 }
 
+// Nettoie la sortie du modèle LLM des balises inutiles
 const cleanLLMOutput = (text: string): string => {
-    // Remove <think>...</think> blocks if any (common in some reasoning models)
+    // Supprime les blocs <think>...</think> (utilisés par certains modèles)
     let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
-    
-    // Remove HTML tags
+
+    // Supprime les balises HTML résiduelles
     cleaned = cleaned.replace(/<[^>]*>/g, '');
     
     return cleaned.trim();
 };
 
+// Exécute un prompt auprès du fournisseur LLM configuré avec gestion des langues
 const runPrompt = async (prompt: string, config: LLMConfig, images: string[] = [], language?: 'fr' | 'en'): Promise<string> => {
     try {
-        // Append language instruction if specified
+        // Ajoute les instructions de langue si spécifiées
         let finalPrompt = prompt;
         if (language === 'fr') {
-            finalPrompt += '\n\nIMPORTANT OUTPUT INSTRUCTION: You MUST write your entire response in FRENCH (Français). All output must be in French.';
+            finalPrompt += '\n\nINSTRUCTION DE SORTIE IMPORTANTE: Vous DEVEZ écrire votre réponse ENTIÈRE en FRANÇAIS. Toute la sortie doit être en français.';
         } else if (language === 'en') {
             finalPrompt += '\n\nIMPORTANT OUTPUT INSTRUCTION: You MUST write your entire response in ENGLISH. All output must be in English.';
         }
 
+        // Appelle le fournisseur LLM approprié selon la configuration
         let result = "";
         switch (config.provider) {
           case 'ollama':
+            // Appel au modèle Ollama local
             result = await callOllama(finalPrompt, config, images);
             break;
           case 'local_http':
+            // Appel au serveur HTTP local (LM Studio, LocalAI)
             result = await callLocalHttp(finalPrompt, config);
             break;
           case 'n8n':
+            // Appel via webhook N8N
             result = await callN8n(finalPrompt, config);
             break;
           default:
-            return `Provider ${config.provider} not supported. Use Local AI only.`;
+            return `Fournisseur ${config.provider} non supporté. Utilisez uniquement l'IA locale.`;
         }
         return cleanLLMOutput(result);
       } catch (error: any) {
