@@ -1,10 +1,12 @@
 
+// --- ÉNUMÉRATIONS D'UTILISATEUR ---
 export enum UserRole {
   ADMIN = 'Admin',
   MANAGER = 'Manager',
   EMPLOYEE = 'Employee'
 }
 
+// --- ÉTATS DES TÂCHES ---
 export enum TaskStatus {
   TODO = 'To Do',
   ONGOING = 'In Progress',
@@ -20,6 +22,7 @@ export interface TaskAction {
   status: TaskActionStatus;
 }
 
+// --- PRIORITÉS DES TÂCHES ---
 export enum TaskPriority {
   LOW = 'Low',
   MEDIUM = 'Medium',
@@ -27,6 +30,7 @@ export enum TaskPriority {
   URGENT = 'Urgent'
 }
 
+// --- ÉTATS DES PROJETS ---
 export enum ProjectStatus {
   PLANNING = 'Planning',
   ACTIVE = 'Active',
@@ -47,13 +51,15 @@ export enum ActionItemStatus {
   DONE = 'Done'
 }
 
+// --- CONFIGURATION DU MODÈLE LLM ---
 export type LLMProvider = 'ollama' | 'local_http' | 'n8n';
 
+// Interface de configuration pour les fournisseurs LLM locaux
 export interface LLMConfig {
   provider: LLMProvider;
-  baseUrl?: string; 
-  apiKey?: string; 
-  model: string; 
+  baseUrl?: string; // URL du serveur (ex: http://localhost:11434)
+  apiKey?: string; // Clé optionnelle pour authentification
+  model: string; // Nom du modèle à utiliser
 }
 
 export interface ChatMessage {
@@ -64,16 +70,17 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+// --- STRUCTURE D'UTILISATEUR ---
 export interface User {
   id: string;
   uid: string;
   firstName: string;
   lastName: string;
-  functionTitle: string;
+  functionTitle: string; // Titre du poste
   role: UserRole;
-  managerId?: string | null;
+  managerId?: string | null; // Référence au manager de cet utilisateur
   avatarUrl?: string;
-  password?: string; 
+  password?: string; // Champ de mot de passe simple (pour démo)
   location?: string;
 }
 
@@ -90,23 +97,24 @@ export interface ExternalDependency {
   status: 'Red' | 'Amber' | 'Green';
 }
 
+// --- STRUCTURE D'UNE TÂCHE ---
 export interface Task {
   id: string;
   title: string;
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
-  assigneeId?: string; 
-  eta: string; 
-  cost?: number; 
-  dependencies?: string[]; 
-  externalDependencies?: ExternalDependency[];
-  actions?: TaskAction[]; 
-  weight: number; 
-  isImportant: boolean; 
-  checklist?: ChecklistItem[]; 
-  order?: number; 
-  docUrls?: string[];
+  assigneeId?: string; // ID de l'utilisateur assigné
+  eta: string; // Date estimée de fin
+  cost?: number; // Coût estimé
+  dependencies?: string[]; // IDs des tâches dépendantes
+  externalDependencies?: ExternalDependency[]; // Dépendances externes (Red/Amber/Green)
+  actions?: TaskAction[]; // Actions liées à la tâche
+  weight: number; // Poids/complexité
+  isImportant: boolean; // Flag pour les tâches critiques
+  checklist?: ChecklistItem[]; // Sous-tâches ou éléments à vérifier
+  order?: number; // Ordre d'affichage
+  docUrls?: string[]; // Liens de documentation
 }
 
 export interface ProjectMember {
@@ -122,29 +130,30 @@ export interface AuditEntry {
     details?: string;
 }
 
+// --- STRUCTURE D'UN PROJET ---
 export interface Project {
   id: string;
   name: string;
   description: string;
   status: ProjectStatus;
-  managerId?: string; 
-  owner?: string; 
-  architect?: string; 
-  deadline: string; 
-  cost?: number; 
-  members: ProjectMember[];
-  tasks: Task[];
-  isImportant: boolean; 
+  managerId?: string; // ID du gestionnaire du projet
+  owner?: string; // Propriétaire du projet
+  architect?: string; // Architecte technique
+  deadline: string; // Date limite
+  cost?: number; // Budget
+  members: ProjectMember[]; // Membres assignés au projet
+  tasks: Task[]; // Toutes les tâches du projet
+  isImportant: boolean; // Flag de priorité
   isFavorite?: boolean;
-  isArchived?: boolean; 
-  completedAt?: string;
-  docUrls?: string[]; 
-  dependencies?: string[]; 
-  externalDependencies?: ExternalDependency[]; 
-  additionalDescriptions?: string[];
-  auditLog?: AuditEntry[];
-  sharedWith?: string[]; // User IDs who can see this project regardless of team membership
-  createdByBot?: boolean;
+  isArchived?: boolean; // Projet archivé?
+  completedAt?: string; // Date d'achèvement
+  docUrls?: string[]; // Liens de documentation
+  dependencies?: string[]; // Dépendances avec d'autres projets
+  externalDependencies?: ExternalDependency[]; // Dépendances externes
+  additionalDescriptions?: string[]; // Contextes supplémentaires pour l'IA
+  auditLog?: AuditEntry[]; // Historique des modifications
+  sharedWith?: string[]; // IDs d'utilisateurs avec accès au-delà de l'équipe
+  createdByBot?: boolean; // Créé par l'IA?
 }
 
 export interface Team {
@@ -198,7 +207,7 @@ export interface WeeklyReport {
   isArchived?: boolean;
 }
 
-// --- WORKING GROUP TYPES ---
+// --- TYPES DE GROUPE DE TRAVAIL ---
 
 export interface WorkingGroupChecklistItem {
     id: string;
@@ -226,7 +235,8 @@ export interface WorkingGroup {
   archived: boolean;
 }
 
-// --- SMART TODO TYPES ---
+// --- TYPES DE TÂCHE INTELLIGENTE (SMART TODO) ---
+// Système de gestion personnelle des tâches avec matrice Eisenhower
 
 export type TodoStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
 export type TodoPriorityLevel = 'low' | 'medium' | 'high' | 'urgent';
@@ -237,9 +247,10 @@ export interface TodoAttachment {
   url: string;
 }
 
+// Structure d'une tâche personnelle intelligente
 export interface SmartTodo {
   id: string;
-  userId: string; // Private per-user — only visible to the owner
+  userId: string; // Privé par utilisateur - visible uniquement au propriétaire
   createdAt: string;
   updatedAt: string;
   source: string; // "Email", "Meeting", "Manual", "Bot", etc.
@@ -263,7 +274,8 @@ export interface SmartTodo {
   completedAt: string | null;
 }
 
-// --- NOTIFICATION TYPES ---
+// --- TYPES DE NOTIFICATION ---
+// Événements système qui génèrent des notifications
 export type NotificationType =
   | 'project_created' | 'project_updated'
   | 'task_created' | 'task_updated'
@@ -283,26 +295,29 @@ export interface AppNotification {
   seenBy: string[];
 }
 
-// --- SYSTEM CONFIG ---
+// --- CONFIGURATION SYSTÈME ---
+// Message système affiché globalement dans l'application
 export interface SystemMessage {
     active: boolean;
     content: string;
     level: 'info' | 'warning' | 'alert';
 }
 
+// --- ÉTAT GLOBAL DE L'APPLICATION ---
+// Structure principale contenant toutes les données de l'app
 export interface AppState {
-  users: User[];
-  teams: Team[];
-  meetings: Meeting[];
-  weeklyReports: WeeklyReport[];
-  workingGroups: WorkingGroup[];
-  smartTodos: SmartTodo[];
-  notifications: AppNotification[];
-  dismissedAlerts: { [key: string]: string }; // key -> ISO date of dismissal, per-user stored locally
-  systemMessage?: SystemMessage;
-  currentUser: User | null;
-  theme: 'light' | 'dark';
-  llmConfig: LLMConfig;
-  prompts?: Record<string, string>;
-  lastUpdated?: number;
+  users: User[]; // Tous les utilisateurs
+  teams: Team[]; // Toutes les équipes et leurs projets
+  meetings: Meeting[]; // Réunions enregistrées
+  weeklyReports: WeeklyReport[]; // Rapports hebdomadaires
+  workingGroups: WorkingGroup[]; // Groupes de travail avec sessions
+  smartTodos: SmartTodo[]; // Tâches personnelles intelligentes
+  notifications: AppNotification[]; // Notifications système
+  dismissedAlerts: { [key: string]: string }; // Alertes rejetées (clé -> date ISO), stocké localement par utilisateur
+  systemMessage?: SystemMessage; // Message système global
+  currentUser: User | null; // Utilisateur actuellement connecté (local seulement)
+  theme: 'light' | 'dark'; // Thème de l'interface (local seulement)
+  llmConfig: LLMConfig; // Configuration du modèle LLM
+  prompts?: Record<string, string>; // Prompts personnalisés
+  lastUpdated?: number; // Timestamp de la dernière synchronisation
 }
