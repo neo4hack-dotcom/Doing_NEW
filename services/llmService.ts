@@ -290,7 +290,7 @@ const prepareTeamData = (team: Team, manager: User | undefined): string => {
     const blocked = p.tasks.filter(t => t.status === TaskStatus.BLOCKED).length;
     
     const context = (p.additionalDescriptions || [])
-        .filter(d => d.trim().length > 0)
+        .filter(d => d != null && d.trim().length > 0)
         .map((d, i) => `Context Layer ${i+1}: ${d}`)
         .join('\n');
 
@@ -317,7 +317,7 @@ const prepareProjectDetailData = (project: Project, users: User[]): string => {
     const managerName = users.find(u => u.id === project.managerId)?.lastName || 'Unassigned';
     
     const contextLayers = (project.additionalDescriptions || [])
-        .filter(d => d.trim().length > 0)
+        .filter(d => d != null && d.trim().length > 0)
         .map((d, i) => `Hidden Context ${i+1}: ${d}`)
         .join('\n');
 

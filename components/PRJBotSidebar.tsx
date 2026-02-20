@@ -103,7 +103,7 @@ const PRJBotSidebar: React.FC<PRJBotSidebarProps> = ({ isOpen, onClose, llmConfi
 
     const now = new Date().toISOString();
     const newTasks: Task[] = extractedTasks
-      .filter(t => t.title.trim())
+      .filter(t => t.title != null && t.title.trim())
       .map((t, i) => ({
         id: generateId(),
         title: t.title,
@@ -440,7 +440,7 @@ const PRJBotSidebar: React.FC<PRJBotSidebarProps> = ({ isOpen, onClose, llmConfi
               </div>
               <h3 className="text-lg font-bold text-slate-800 dark:text-white">Project Created!</h3>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                <strong>{extractedProject.name}</strong> has been added with {extractedTasks.filter(t => t.title.trim()).length} tasks.
+                <strong>{extractedProject.name}</strong> has been added with {extractedTasks.filter(t => t.title != null && t.title.trim()).length} tasks.
               </p>
               <button
                 onClick={handleReset}

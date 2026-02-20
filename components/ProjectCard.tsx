@@ -58,7 +58,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     }
 
     const sortedTasks = [...project.tasks].sort((a, b) => (a.order || 0) - (b.order || 0));
-    const hasContext = project.additionalDescriptions && project.additionalDescriptions.some(d => d.trim().length > 0);
+    const hasContext = project.additionalDescriptions && project.additionalDescriptions.some(d => d != null && d.trim().length > 0);
 
     // Style for favorite projects
     const favoriteStyle = project.isFavorite 
@@ -281,7 +281,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                             {showContext && (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in">
                                     {project.additionalDescriptions?.map((desc, i) => (
-                                        desc.trim() && (
+                                        desc != null && desc.trim() && (
                                             <div key={i} className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/30">
                                                 <span className="text-[10px] uppercase font-bold text-indigo-400 mb-1 block">Context Layer {i+1}</span>
                                                 <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{desc}</p>
