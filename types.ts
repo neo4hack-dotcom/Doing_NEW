@@ -255,9 +255,13 @@ export interface SmartTodo {
   updatedAt: string;
   source: string; // "Email", "Meeting", "Manual", "Bot", etc.
   requester: string;
+  sponsor?: string; // Sponsor ou commanditaire de la tâche
   isRecurring: boolean;
   recurrenceRule: string | null;
   createdByBot?: boolean; // Visual indicator icon — read-only
+  isArchived?: boolean; // Tâche archivée (exclue des KPIs)
+  managerAssigned?: boolean; // Tâche assignée par un manager/admin
+  assignedByUserId?: string; // ID de l'admin ayant assigné la tâche
   title: string;
   description: string;
   tags: string[];
@@ -280,7 +284,8 @@ export type NotificationType =
   | 'project_created' | 'project_updated'
   | 'task_created' | 'task_updated'
   | 'report_created' | 'report_updated'
-  | 'stale_project' | 'report_overdue';
+  | 'stale_project' | 'report_overdue'
+  | 'todo_assigned';
 
 export interface AppNotification {
   id: string;

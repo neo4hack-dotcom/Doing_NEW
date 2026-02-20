@@ -1,5 +1,5 @@
 
-import { Team, User, TaskStatus, LLMConfig, Meeting, WeeklyReport, ChatMessage, Project, WorkingGroup, ActionItemStatus } from "../types";
+import { Team, User, TaskStatus, LLMConfig, Meeting, WeeklyReport, ChatMessage, Project, WorkingGroup, ActionItemStatus, SmartTodo } from "../types";
 
 // --- PROMPTS PAR DÉFAUT ---
 // Chaque prompt correspond à un cas d'usage spécifique (rapports, réunions, etc.)
@@ -1206,6 +1206,48 @@ Required JSON structure:
             actionItems: [],
         };
     }
+};
+
+export const generateTodoSynthesis = async (todos: SmartTodo[], config: LLMConfig, language?: 'fr' | 'en'): Promise<string> => {
+    const activeTodos = todos.filter(t => t.status !== 'done' && t.status !== 'cancelled' && !t.isArchived);
+
+    const todoText = activeTodos.map(t => {
+        const overdue = t.dueDate && t.dueDate < new Date().toISOString().split('T')[0];
+        return `- [${t.priorityLevel.toUpperCase()}] "${t.title}"
+    Status: ${t.status} | Due: ${t.dueDate || 'No date'}${overdue ? ' ⚠️ OVERDUE' : ''} | Eisenhower: Q${t.eisenhowerQuadrant || 'N/A'}
+    Description: ${t.description || 'N/A'}
+    Source: ${t.source || 'N/A'} | Requester: ${t.requester || 'N/A'} | Sponsor: ${t.sponsor || 'N/A'}
+    Tags: ${t.tags.join(', ') || 'None'}`;
+    }).join('\n\n');
+
+    const prompt = `You are a personal productivity coach analyzing a person's active task list.
+
+ACTIVE TASKS (${activeTodos.length} total):
+${todoText || 'No active tasks.'}
+
+TASK:
+Generate a clear, actionable synthesis report with the following sections:
+
+### 🎯 Priority Recommendations
+List the top 3-5 tasks that should be tackled first, with a brief explanation of why (urgency, impact, deadline).
+
+### ⚠️ Risk Highlights
+Identify tasks that present risks: overdue items, blocked tasks, high-priority items with no due date, or concerning patterns. Use **Bold** with "Alert" or "Warning" for critical items.
+
+### ⚡ Quick Wins
+List tasks that can be completed quickly to build momentum and reduce backlog size.
+
+### 📊 Backlog Summary
+2-3 sentences summarizing the overall state of the task list. Mention total active tasks, any urgent/blocked items, and overall health.
+
+Rules:
+- Be direct, factual, and actionable.
+- Do NOT invent information not present in the data.
+- If there are no tasks or very few, say so clearly.
+- Format in clean Markdown.
+`;
+
+    return runPrompt(prompt, config, [], language);
 };
 
 export const fetchOllamaModels = async (baseUrl: string): Promise<string[]> => {
