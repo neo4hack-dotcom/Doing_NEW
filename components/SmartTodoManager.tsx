@@ -1,13 +1,14 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Bot, Search, CheckCircle2, Circle, AlertCircle, PauseCircle, XCircle,
   Trash2, Edit3, X, Tag, Link, Clock, Zap, Calendar, Repeat, Flag,
   ChevronDown, ChevronUp, ExternalLink, Paperclip, Brain, LayoutGrid, List,
-  Filter, ArrowUp, ArrowRight, ArrowDown, Minus
+  Filter, ArrowUp, ArrowRight, ArrowDown, Minus, Archive, ArchiveRestore, Sparkles, Shield
 } from 'lucide-react';
-import { SmartTodo, TodoStatus, TodoPriorityLevel, EnergyLevel, User, LLMConfig } from '../types';
+import { SmartTodo, TodoStatus, TodoPriorityLevel, EnergyLevel, User, LLMConfig, AppNotification, UserRole } from '../types';
 import { generateId } from '../services/storage';
+import { generateTodoSynthesis } from '../services/llmService';
 import AITodoBotSidebar from './AITodoBotSidebar';
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -61,12 +62,12 @@ const PRIORITY_ICON: Record<TodoPriorityLevel, React.ReactNode> = {
   low: <ArrowDown className="w-3 h-3" />,
 };
 
-const STATUS_CONFIG: Record<TodoStatus, { icon: React.ReactNode; label: string; color: string }> = {
-  todo: { icon: <Circle className="w-4 h-4" />, label: 'To Do', color: 'text-gray-400 dark:text-gray-500' },
-  in_progress: { icon: <Clock className="w-4 h-4" />, label: 'In Progress', color: 'text-blue-500' },
-  blocked: { icon: <AlertCircle className="w-4 h-4" />, label: 'Blocked', color: 'text-red-500' },
-  done: { icon: <CheckCircle2 className="w-4 h-4" />, label: 'Done', color: 'text-green-500' },
-  cancelled: { icon: <XCircle className="w-4 h-4" />, label: 'Cancelled', color: 'text-gray-400' },
+const STATUS_CONFIG: Record<TodoStatus, { icon: React.ReactNode; label: string; color: string; activeBg: string }> = {
+  todo: { icon: <Circle className="w-4 h-4" />, label: 'To Do', color: 'text-gray-400 dark:text-gray-500', activeBg: 'bg-gray-500' },
+  in_progress: { icon: <Clock className="w-4 h-4" />, label: 'In Progress', color: 'text-blue-500', activeBg: 'bg-blue-500' },
+  blocked: { icon: <AlertCircle className="w-4 h-4" />, label: 'Blocked', color: 'text-red-500', activeBg: 'bg-red-500' },
+  done: { icon: <CheckCircle2 className="w-4 h-4" />, label: 'Done', color: 'text-green-500', activeBg: 'bg-green-500' },
+  cancelled: { icon: <XCircle className="w-4 h-4" />, label: 'Cancelled', color: 'text-gray-400', activeBg: 'bg-gray-400' },
 };
 
 const QUADRANT_CONFIG: Record<number, { label: string; sublabel: string; color: string; bg: string }> = {
@@ -91,9 +92,13 @@ const blankForm = (userId: string): SmartTodo => ({
   updatedAt: new Date().toISOString(),
   source: '',
   requester: '',
+  sponsor: '',
   isRecurring: false,
   recurrenceRule: null,
   createdByBot: false,
+  isArchived: false,
+  managerAssigned: false,
+  assignedByUserId: undefined,
   title: '',
   description: '',
   tags: [],
@@ -117,9 +122,10 @@ interface TodoCardProps {
   onClick: () => void;
   onStatusToggle: (next: TodoStatus) => void;
   onDelete: () => void;
+  onArchiveToggle: () => void;
 }
 
-const TodoCard: React.FC<TodoCardProps> = ({ todo, onClick, onStatusToggle, onDelete }) => {
+const TodoCard: React.FC<TodoCardProps> = ({ todo, onClick, onStatusToggle, onDelete, onArchiveToggle }) => {
   const statusCfg = STATUS_CONFIG[todo.status];
   const overdue = isOverdue(todo);
   const dueToday = isDueToday(todo);
@@ -136,6 +142,7 @@ const TodoCard: React.FC<TodoCardProps> = ({ todo, onClick, onStatusToggle, onDe
         ${PRIORITY_BORDER[todo.priorityLevel]}
         ${todo.status === 'done' ? 'opacity-60' : ''}
         ${todo.status === 'cancelled' ? 'opacity-40' : ''}
+        ${todo.isArchived ? 'opacity-50' : ''}
         ${overdue ? 'border-t-2 border-t-red-400' : ''}
         border-gray-100 dark:border-gray-800`}
       onClick={onClick}
@@ -161,6 +168,11 @@ const TodoCard: React.FC<TodoCardProps> = ({ todo, onClick, onStatusToggle, onDe
 
           {/* Badges */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {todo.managerAssigned && (
+              <span title="Manager assigned task" className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-[10px] font-bold">
+                <Shield className="w-3 h-3" /> Manager ask
+              </span>
+            )}
             {todo.createdByBot && (
               <span title="Created by AI Bot" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-900/30">
                 <Bot className="w-3 h-3 text-violet-600 dark:text-violet-400" />
@@ -176,6 +188,15 @@ const TodoCard: React.FC<TodoCardProps> = ({ todo, onClick, onStatusToggle, onDe
               {todo.priorityLevel}
             </span>
           </div>
+
+          {/* Archive button (hover) */}
+          <button
+            onClick={e => { e.stopPropagation(); onArchiveToggle(); }}
+            className="opacity-0 group-hover:opacity-100 shrink-0 p-1 text-gray-300 hover:text-amber-500 dark:text-gray-600 dark:hover:text-amber-400 transition-all"
+            title={todo.isArchived ? 'Unarchive' : 'Archive'}
+          >
+            {todo.isArchived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+          </button>
 
           {/* Delete (hover) */}
           <button
@@ -250,14 +271,26 @@ interface TodoFormModalProps {
   onSave: (todo: SmartTodo) => void;
   onClose: () => void;
   title: string;
+  currentUser: User;
+  users?: User[];
+  onAddNotification?: (n: AppNotification) => void;
 }
 
-const TodoFormModal: React.FC<TodoFormModalProps> = ({ initial, onSave, onClose, title }) => {
+const TodoFormModal: React.FC<TodoFormModalProps> = ({ initial, onSave, onClose, title, currentUser, users, onAddNotification }) => {
   const [form, setForm] = useState<SmartTodo>(initial);
   const [tagInput, setTagInput] = useState('');
   const [linkInput, setLinkInput] = useState('');
   const [attachName, setAttachName] = useState('');
   const [attachUrl, setAttachUrl] = useState('');
+
+  // Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const set = (field: keyof SmartTodo, value: any) =>
     setForm(prev => ({ ...prev, [field]: value }));
@@ -291,6 +324,17 @@ const TodoFormModal: React.FC<TodoFormModalProps> = ({ initial, onSave, onClose,
     });
   };
 
+  const handleArchiveToggle = () => {
+    onSave({
+      ...form,
+      isArchived: !form.isArchived,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  const isEditing = !!form.id;
+  const isAdmin = currentUser.role === UserRole.ADMIN;
+
   const inputCls = 'w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-400';
   const labelCls = 'block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1';
 
@@ -316,31 +360,67 @@ const TodoFormModal: React.FC<TodoFormModalProps> = ({ initial, onSave, onClose,
             <input value={form.title} onChange={e => set('title', e.target.value)} className={inputCls} placeholder="What needs to be done?" />
           </div>
 
+          {/* Admin: Assign to User */}
+          {isAdmin && users && users.length > 0 && (
+            <div>
+              <label className={labelCls}>Assign to User (Admin)</label>
+              <select
+                value={form.userId}
+                onChange={e => {
+                  const selectedUserId = e.target.value;
+                  setForm(prev => ({
+                    ...prev,
+                    userId: selectedUserId,
+                    managerAssigned: selectedUserId !== currentUser.id,
+                    assignedByUserId: selectedUserId !== currentUser.id ? currentUser.id : undefined,
+                  }));
+                }}
+                className={inputCls}
+              >
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.firstName} {u.lastName}{u.id === currentUser.id ? ' (you)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Description */}
           <div>
             <label className={labelCls}>Description</label>
             <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} className={inputCls + ' resize-none'} placeholder="Additional context..." />
           </div>
 
-          {/* Status + Priority */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Status</label>
-              <select value={form.status} onChange={e => set('status', e.target.value as TodoStatus)} className={inputCls}>
-                {(Object.keys(STATUS_CONFIG) as TodoStatus[]).map(s => (
-                  <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
-                ))}
-              </select>
+          {/* Status buttons */}
+          <div>
+            <label className={labelCls}>Status</label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(STATUS_CONFIG) as TodoStatus[]).map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => set('status', s)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors
+                    ${form.status === s
+                      ? `${STATUS_CONFIG[s].activeBg} text-white border-transparent`
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400'}`}
+                >
+                  {STATUS_CONFIG[s].icon} {STATUS_CONFIG[s].label}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className={labelCls}>Priority</label>
-              <select value={form.priorityLevel} onChange={e => set('priorityLevel', e.target.value as TodoPriorityLevel)} className={inputCls}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            </div>
+          </div>
+
+          {/* Priority */}
+          <div>
+            <label className={labelCls}>Priority</label>
+            <select value={form.priorityLevel} onChange={e => set('priorityLevel', e.target.value as TodoPriorityLevel)} className={inputCls}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
           </div>
 
           {/* Eisenhower + Energy */}
@@ -381,15 +461,19 @@ const TodoFormModal: React.FC<TodoFormModalProps> = ({ initial, onSave, onClose,
             </div>
           </div>
 
-          {/* Source + Requester */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Source + Requester + Sponsor */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className={labelCls}>Source</label>
-              <input value={form.source} onChange={e => set('source', e.target.value)} className={inputCls} placeholder="Email, Meeting, Manual..." />
+              <input value={form.source} onChange={e => set('source', e.target.value)} className={inputCls} placeholder="Email, Meeting..." />
             </div>
             <div>
               <label className={labelCls}>Requester</label>
               <input value={form.requester} onChange={e => set('requester', e.target.value)} className={inputCls} placeholder="Who requested this?" />
+            </div>
+            <div>
+              <label className={labelCls}>Sponsor</label>
+              <input value={form.sponsor ?? ''} onChange={e => set('sponsor', e.target.value)} className={inputCls} placeholder="Sponsor / Commanditaire" />
             </div>
           </div>
 
@@ -460,6 +544,16 @@ const TodoFormModal: React.FC<TodoFormModalProps> = ({ initial, onSave, onClose,
 
         {/* Footer */}
         <div className="flex gap-3 p-5 border-t border-gray-100 dark:border-gray-800">
+          {isEditing && (
+            <button
+              onClick={handleArchiveToggle}
+              className="flex items-center gap-2 px-4 py-2.5 border border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 rounded-xl text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+              title={form.isArchived ? 'Unarchive this todo' : 'Archive this todo'}
+            >
+              {form.isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+              {form.isArchived ? 'Unarchive' : 'Archive'}
+            </button>
+          )}
           <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
             Cancel
           </button>
@@ -480,11 +574,21 @@ interface TodoDetailModalProps {
   onEdit: () => void;
   onDelete: () => void;
   onStatusChange: (status: TodoStatus) => void;
+  onArchiveToggle: () => void;
 }
 
-const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit, onDelete, onStatusChange }) => {
+const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit, onDelete, onStatusChange, onArchiveToggle }) => {
   const statusCfg = STATUS_CONFIG[todo.status];
   const overdue = isOverdue(todo);
+
+  // Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
@@ -499,6 +603,16 @@ const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit
               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase ${PRIORITY_BADGE[todo.priorityLevel]}`}>
                 {PRIORITY_ICON[todo.priorityLevel]} {todo.priorityLevel}
               </span>
+              {todo.managerAssigned && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-[11px] font-bold">
+                  <Shield className="w-3 h-3" /> Manager ask
+                </span>
+              )}
+              {todo.isArchived && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[11px] font-medium">
+                  <Archive className="w-3 h-3" /> Archived
+                </span>
+              )}
               {todo.createdByBot && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[11px] font-medium">
                   <Bot className="w-3 h-3" /> Created by AI Bot
@@ -518,6 +632,13 @@ const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit
             <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-snug">{todo.title}</h3>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={onArchiveToggle}
+              className="p-2 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-500 dark:text-amber-400 rounded-lg transition-colors"
+              title={todo.isArchived ? 'Unarchive' : 'Archive'}
+            >
+              {todo.isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+            </button>
             <button onClick={onEdit} className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg transition-colors" title="Edit">
               <Edit3 className="w-4 h-4" />
             </button>
@@ -541,8 +662,8 @@ const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit
                 onClick={() => onStatusChange(s)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors
                   ${todo.status === s
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-indigo-400 hover:text-indigo-600'}`}
+                    ? `${STATUS_CONFIG[s].activeBg} text-white border-transparent`
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400 hover:text-gray-700'}`}
               >
                 {STATUS_CONFIG[s].icon} {STATUS_CONFIG[s].label}
               </button>
@@ -614,6 +735,12 @@ const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit
                 <p className="text-sm text-gray-700 dark:text-gray-300">{todo.requester}</p>
               </div>
             )}
+            {todo.sponsor && (
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Sponsor</p>
+                <p className="text-sm text-gray-700 dark:text-gray-300">{todo.sponsor}</p>
+              </div>
+            )}
           </div>
 
           {/* Tags */}
@@ -674,6 +801,60 @@ const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit
   );
 };
 
+// ── AISynthesisModal ─────────────────────────────────────────────────────────
+
+interface AISynthesisModalProps {
+  result: string;
+  onClose: () => void;
+}
+
+const AISynthesisModal: React.FC<AISynthesisModalProps> = ({ result, onClose }) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col border border-gray-100 dark:border-gray-800"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-violet-500" />
+            <h3 className="font-bold text-gray-900 dark:text-white text-lg">AI Synthesis</h3>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 p-5">
+          <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans leading-relaxed">
+            {result}
+          </pre>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-gray-100 dark:border-gray-800">
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── EisenhowerMatrixView ────────────────────────────────────────────────────
 
 interface EisenhowerMatrixViewProps {
@@ -682,8 +863,10 @@ interface EisenhowerMatrixViewProps {
 }
 
 const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({ todos, onTodoClick }) => {
-  const getQuadrantTodos = (q: 1 | 2 | 3 | 4) => todos.filter(t => t.eisenhowerQuadrant === q && t.status !== 'done' && t.status !== 'cancelled');
-  const unclassified = todos.filter(t => !t.eisenhowerQuadrant && t.status !== 'done' && t.status !== 'cancelled');
+  // Only show active (non-archived) todos in the matrix
+  const activeTodos = todos.filter(t => !t.isArchived);
+  const getQuadrantTodos = (q: 1 | 2 | 3 | 4) => activeTodos.filter(t => t.eisenhowerQuadrant === q && t.status !== 'done' && t.status !== 'cancelled');
+  const unclassified = activeTodos.filter(t => !t.eisenhowerQuadrant && t.status !== 'done' && t.status !== 'cancelled');
 
   const QuadrantCell = ({ q }: { q: 1 | 2 | 3 | 4 }) => {
     const cfg = QUADRANT_CONFIG[q];
@@ -743,10 +926,12 @@ interface SmartTodoManagerProps {
   llmConfig: LLMConfig;
   onSaveTodo: (todo: SmartTodo) => void;
   onDeleteTodo: (id: string) => void;
+  users?: User[];
+  onAddNotification?: (notif: AppNotification) => void;
 }
 
 const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
-  todos, currentUser, llmConfig, onSaveTodo, onDeleteTodo
+  todos, currentUser, llmConfig, onSaveTodo, onDeleteTodo, users, onAddNotification
 }) => {
   const [filterStatus, setFilterStatus] = useState<'all' | TodoStatus>('all');
   const [filterPriority, setFilterPriority] = useState<'all' | TodoPriorityLevel>('all');
@@ -754,15 +939,19 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
   const [sortBy, setSortBy] = useState<'due_date' | 'priority' | 'created' | 'title'>('due_date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [viewMode, setViewMode] = useState<'list' | 'matrix'>('list');
+  const [viewTab, setViewTab] = useState<'active' | 'archived'>('active');
   const [selectedTodo, setSelectedTodo] = useState<SmartTodo | null>(null);
   const [editingTodo, setEditingTodo] = useState<SmartTodo | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isAiBotOpen, setIsAiBotOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [aiSynthesisLoading, setAiSynthesisLoading] = useState(false);
+  const [aiSynthesisResult, setAiSynthesisResult] = useState<string | null>(null);
 
-  // ── Stats ──────────────────────────────────────────────────────────────
+  // ── Stats (only non-archived todos) ────────────────────────────────────
   const stats = useMemo(() => {
-    const active = todos.filter(t => t.status !== 'cancelled');
+    const nonArchived = todos.filter(t => !t.isArchived);
+    const active = nonArchived.filter(t => t.status !== 'cancelled');
     return {
       total: active.length,
       todo: active.filter(t => t.status === 'todo').length,
@@ -778,7 +967,10 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
   const PRIORITY_ORDER: Record<TodoPriorityLevel, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
   const filtered = useMemo(() => {
-    let result = [...todos];
+    // First filter by active/archived tab
+    let result = viewTab === 'active'
+      ? todos.filter(t => !t.isArchived)
+      : todos.filter(t => t.isArchived);
 
     if (filterStatus !== 'all') result = result.filter(t => t.status === filterStatus);
     if (filterPriority !== 'all') result = result.filter(t => t.priorityLevel === filterPriority);
@@ -811,11 +1003,36 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
     });
 
     return result;
-  }, [todos, filterStatus, filterPriority, searchQuery, sortBy, sortDir]);
+  }, [todos, viewTab, filterStatus, filterPriority, searchQuery, sortBy, sortDir]);
 
   // ── Handlers ───────────────────────────────────────────────────────────
   const handleCreate = (form: SmartTodo) => {
-    onSaveTodo({ ...form, id: generateId(), userId: currentUser.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    const newTodo: SmartTodo = {
+      ...form,
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    // If userId not set by admin assignment, use currentUser.id
+    if (!newTodo.userId) newTodo.userId = currentUser.id;
+
+    onSaveTodo(newTodo);
+
+    // Notify if manager-assigned to another user
+    if (newTodo.managerAssigned && newTodo.userId !== currentUser.id && onAddNotification) {
+      onAddNotification({
+        id: generateId(),
+        type: 'todo_assigned',
+        message: `Manager assigned you a new task: ${newTodo.title}`,
+        targetRole: 'user',
+        targetUserId: newTodo.userId,
+        triggeredBy: currentUser.id,
+        relatedId: newTodo.id,
+        createdAt: new Date().toISOString(),
+        seenBy: [],
+      });
+    }
+
     setIsCreating(false);
   };
 
@@ -842,6 +1059,28 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
     if (selectedTodo?.id === id) setSelectedTodo(null);
   };
 
+  const handleArchiveToggle = (todo: SmartTodo) => {
+    const updated: SmartTodo = {
+      ...todo,
+      isArchived: !todo.isArchived,
+      updatedAt: new Date().toISOString(),
+    };
+    onSaveTodo(updated);
+    if (selectedTodo?.id === todo.id) setSelectedTodo(null);
+  };
+
+  const handleAISynthesis = async () => {
+    setAiSynthesisLoading(true);
+    try {
+      const result = await generateTodoSynthesis(todos, llmConfig);
+      setAiSynthesisResult(result);
+    } catch (e: any) {
+      setAiSynthesisResult(`Error generating synthesis: ${e.message}`);
+    } finally {
+      setAiSynthesisLoading(false);
+    }
+  };
+
   const toggleSort = (field: typeof sortBy) => {
     if (sortBy === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortBy(field); setSortDir('asc'); }
@@ -864,6 +1103,14 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
         onSaveTodo={todo => { onSaveTodo(todo); setIsAiBotOpen(false); }}
       />
 
+      {/* AI Synthesis Modal */}
+      {aiSynthesisResult && (
+        <AISynthesisModal
+          result={aiSynthesisResult}
+          onClose={() => setAiSynthesisResult(null)}
+        />
+      )}
+
       {/* Modals */}
       {isCreating && (
         <TodoFormModal
@@ -871,6 +1118,9 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
           onSave={handleCreate}
           onClose={() => setIsCreating(false)}
           title="New Smart To Do"
+          currentUser={currentUser}
+          users={users}
+          onAddNotification={onAddNotification}
         />
       )}
       {editingTodo && (
@@ -879,6 +1129,9 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
           onSave={handleUpdate}
           onClose={() => setEditingTodo(null)}
           title="Edit Todo"
+          currentUser={currentUser}
+          users={users}
+          onAddNotification={onAddNotification}
         />
       )}
       {selectedTodo && !editingTodo && (
@@ -888,6 +1141,7 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
           onEdit={() => { setEditingTodo(selectedTodo); setSelectedTodo(null); }}
           onDelete={() => handleDelete(selectedTodo.id)}
           onStatusChange={s => handleStatusChange(selectedTodo, s)}
+          onArchiveToggle={() => handleArchiveToggle(selectedTodo)}
         />
       )}
 
@@ -898,6 +1152,14 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Your personal task list — private to you</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleAISynthesis}
+            disabled={aiSynthesisLoading}
+            className="flex items-center gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 disabled:opacity-60 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-all"
+          >
+            <Sparkles className="w-4 h-4" />
+            {aiSynthesisLoading ? 'Generating...' : 'AI Synthesis'}
+          </button>
           <button
             onClick={() => setIsAiBotOpen(true)}
             className="flex items-center gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-all"
@@ -915,7 +1177,7 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
         </div>
       </div>
 
-      {/* Stats Bar */}
+      {/* Stats Bar (only non-archived todos) */}
       <div className="grid grid-cols-4 gap-3 sm:grid-cols-7">
         {[
           { label: 'Total', value: stats.total, color: 'text-gray-700 dark:text-gray-200', bg: 'bg-white dark:bg-gray-900', filter: 'all' as const },
@@ -935,6 +1197,28 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
             <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">{stat.label}</p>
           </button>
         ))}
+      </div>
+
+      {/* Active / Archived sub-tabs */}
+      <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 w-fit">
+        <button
+          onClick={() => setViewTab('active')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${viewTab === 'active' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+        >
+          Active
+        </button>
+        <button
+          onClick={() => setViewTab('archived')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${viewTab === 'archived' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+        >
+          <Archive className="w-3.5 h-3.5" />
+          Archived
+          {todos.filter(t => t.isArchived).length > 0 && (
+            <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              {todos.filter(t => t.isArchived).length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Toolbar */}
@@ -976,23 +1260,25 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
           ))}
         </div>
 
-        {/* View mode */}
-        <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-2 transition-colors ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-            title="List view"
-          >
-            <List className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('matrix')}
-            className={`p-2 transition-colors ${viewMode === 'matrix' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-            title="Eisenhower matrix"
-          >
-            <Brain className="w-4 h-4" />
-          </button>
-        </div>
+        {/* View mode (only in active tab) */}
+        {viewTab === 'active' && (
+          <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 transition-colors ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+              title="List view"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('matrix')}
+              className={`p-2 transition-colors ${viewMode === 'matrix' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+              title="Eisenhower matrix"
+            >
+              <Brain className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
@@ -1012,14 +1298,16 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
             </button>
           </div>
         </div>
-      ) : viewMode === 'matrix' ? (
+      ) : viewTab === 'active' && viewMode === 'matrix' ? (
         <EisenhowerMatrixView todos={filtered} onTodoClick={setSelectedTodo} />
       ) : (
         <div className="space-y-2">
           {filtered.length === 0 ? (
             <div className="text-center py-12 text-gray-400 dark:text-gray-500">
               <Filter className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">No todos match your filters.</p>
+              <p className="text-sm">
+                {viewTab === 'archived' ? 'No archived todos.' : 'No todos match your filters.'}
+              </p>
             </div>
           ) : (
             filtered.map(todo => (
@@ -1029,6 +1317,7 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
                 onClick={() => setSelectedTodo(todo)}
                 onStatusToggle={s => handleStatusChange(todo, s)}
                 onDelete={() => handleDelete(todo.id)}
+                onArchiveToggle={() => handleArchiveToggle(todo)}
               />
             ))
           )}
