@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { WeeklyReport as WeeklyReportType, HealthStatus, UserRole, User } from '../../types';
-import { Sparkles, CheckCircle2, AlertOctagon, AlertTriangle, Users, MoreHorizontal, Plus, Wand2, Mail, Save, Calendar, Trash2, ShieldCheck } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertOctagon, AlertTriangle, Users, MoreHorizontal, Plus, Wand2, Mail, Save, Calendar, Trash2, ShieldCheck, Bot } from 'lucide-react';
 
 interface WeeklyReportFormProps {
     report: WeeklyReportType;
@@ -12,6 +12,7 @@ interface WeeklyReportFormProps {
     onDelete?: () => void;
     onResetToCurrent: () => void;
     onAutoFill?: () => void;
+    onAiAutoBuild?: () => void;
     onManagerSynthesis?: () => void;
     onGenerateEmail?: () => void;
     onSaveFeedback?: (annotation: string) => void;
@@ -21,7 +22,7 @@ interface WeeklyReportFormProps {
 
 const WeeklyReportForm: React.FC<WeeklyReportFormProps> = ({
     report, currentUser, currentMonday, onChange, onSave, onDelete, onResetToCurrent,
-    onAutoFill, onManagerSynthesis, onGenerateEmail, onSaveFeedback, isAdmin, llmConfigured
+    onAutoFill, onAiAutoBuild, onManagerSynthesis, onGenerateEmail, onSaveFeedback, isAdmin, llmConfigured
 }) => {
     const isPastReport = report.weekOf < currentMonday;
     const isFutureReport = report.weekOf > currentMonday;
@@ -79,6 +80,17 @@ const WeeklyReportForm: React.FC<WeeklyReportFormProps> = ({
                         >
                             <Plus className="w-4 h-4 mr-1" /> New Report
                         </button>
+
+                        {/* AI Auto Build Button - Visible to ALL users */}
+                        {llmConfigured && onAiAutoBuild && (
+                            <button
+                                onClick={onAiAutoBuild}
+                                className="bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white px-3 py-2 rounded-lg font-medium transition-all flex items-center shadow-md text-sm"
+                                title="AI Auto Build — carry forward items from a previous report"
+                            >
+                                <Bot className="w-4 h-4 mr-1.5" /> AI Auto Build
+                            </button>
+                        )}
 
                             {/* Consolidation Magic Button (Admin Only) */}
                             {llmConfigured && isAdmin && onAutoFill && (

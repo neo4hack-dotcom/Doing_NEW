@@ -10,6 +10,7 @@ import { SmartTodo, TodoStatus, TodoPriorityLevel, EnergyLevel, User, LLMConfig,
 import { generateId } from '../services/storage';
 import { generateTodoSynthesis } from '../services/llmService';
 import AITodoBotSidebar from './AITodoBotSidebar';
+import FormattedText from './FormattedText';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -835,10 +836,8 @@ const AISynthesisModal: React.FC<AISynthesisModalProps> = ({ result, onClose }) 
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 p-5">
-          <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans leading-relaxed">
-            {result}
-          </pre>
+        <div className="overflow-y-auto flex-1 p-6">
+          <FormattedText text={result} className="text-sm" />
         </div>
 
         {/* Footer */}

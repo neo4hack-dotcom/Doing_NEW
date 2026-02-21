@@ -1250,6 +1250,77 @@ Rules:
     return runPrompt(prompt, config, [], language);
 };
 
+// ── AI AUTO BUILD ─────────────────────────────────────────────────────────────
+
+export interface ExtractedReportItem {
+    id: string;
+    section: 'newThisWeek' | 'mainSuccess' | 'mainIssue' | 'incident' | 'orgaPoint' | 'otherSection';
+    sectionLabel: string;
+    summary: string;
+    keepAlive: boolean;
+    reason: string;
+}
+
+export const extractLiveItemsFromReport = async (
+    report: WeeklyReport,
+    config: LLMConfig
+): Promise<ExtractedReportItem[]> => {
+    const today = new Date().toISOString().split('T')[0];
+
+    const prompt = `You are analyzing a weekly status report to identify items that are STILL ONGOING and relevant for the current week.
+
+WEEKLY REPORT DATA (from week of ${report.weekOf}):
+---
+NEW THIS WEEK: ${report.newThisWeek || 'N/A'}
+MAIN SUCCESS: ${report.mainSuccess || 'N/A'}
+MAIN ISSUE / BLOCKER: ${report.mainIssue || 'N/A'}
+INCIDENTS: ${report.incident || 'N/A'}
+ORGANIZATIONAL POINT: ${report.orgaPoint || 'N/A'}
+OTHER: ${report.otherSection || 'N/A'}
+---
+
+TODAY'S DATE: ${today}
+
+TASK:
+1. Extract each distinct item/point from each section above.
+2. For each item, determine if it is likely STILL ALIVE/RELEVANT for this week (keepAlive=true) if:
+   - It mentions a future date or deadline still in the future relative to today
+   - It uses language suggesting ongoing work ("in progress", "ongoing", "pending", "will continue", "next week", "upcoming", "blocked", "waiting")
+   - It's a blocker, incident, or issue that takes time to resolve
+3. Set keepAlive=false if:
+   - The item is clearly completed ("done", "finished", "resolved", "closed", "delivered")
+   - It was a one-time event already past
+   - It's in the "New This Week" section (usually not carried over)
+
+CRITICAL: RETURN ONLY A VALID JSON ARRAY. NO MARKDOWN. NO CODE BLOCKS. NO EXPLANATION.
+
+Return format:
+[
+  {
+    "id": "unique_short_id",
+    "section": "mainSuccess|mainIssue|incident|orgaPoint|otherSection|newThisWeek",
+    "sectionLabel": "Human readable section name",
+    "summary": "Concise 1-2 sentence summary of this specific item",
+    "keepAlive": true|false,
+    "reason": "Brief reason why this is or isn't still relevant"
+  }
+]
+
+Only include items that actually exist in the report. If a section is empty or N/A, skip it.`;
+
+    try {
+        const raw = await runPrompt(prompt, config, []);
+        // Try to extract JSON array from response
+        const jsonMatch = raw.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) throw new Error("No JSON array found");
+        const parsed = JSON.parse(jsonMatch[0]);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        console.error("extractLiveItemsFromReport parse error", e);
+        return [];
+    }
+};
+
 export const fetchOllamaModels = async (baseUrl: string): Promise<string[]> => {
   try {
     const url = baseUrl || 'http://localhost:11434';

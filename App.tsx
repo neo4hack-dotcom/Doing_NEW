@@ -16,6 +16,7 @@ import RAGChatSidebar from './components/RAGChatSidebar';
 import NotificationPanel from './components/NotificationPanel';
 import WorkingGroupModule from './components/WorkingGroup';
 import SmartTodoManager from './components/SmartTodoManager';
+import KanbanView from './components/KanbanView';
 
 import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer, generateId, sanitizeAppState } from './services/storage';
 import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage, AppNotification, SmartTodo } from './types';
@@ -963,6 +964,7 @@ const AppContent: React.FC = () => {
             {activeTab === 'dashboard' && <KPIDashboard teams={viewState.teams} systemMessage={viewState.systemMessage} />}
             {activeTab === 'management' && <ManagementDashboard teams={viewState.teams} users={viewState.users} reports={viewState.weeklyReports} meetings={viewState.meetings} workingGroups={viewState.workingGroups || []} llmConfig={appState.llmConfig} onUpdateReport={handleUpdateReport} onUpdateTeam={handleUpdateTeam} notifications={appState.notifications || []} currentUserId={appState.currentUser?.id || ''} onMarkNotificationSeen={handleMarkNotificationSeen} />}
             {activeTab === 'projects' && <ProjectTracker teams={viewState.teams} users={viewState.users} currentUser={appState.currentUser} llmConfig={appState.llmConfig} prompts={appState.prompts} onUpdateTeam={handleUpdateTeam} onDeleteProject={handleDeleteProject} onTransferProject={handleTransferProject} allTeams={appState.teams} allUsers={appState.users} />}
+            {activeTab === 'kanban' && <KanbanView teams={viewState.teams} currentUser={appState.currentUser} users={viewState.users} llmConfig={appState.llmConfig} onUpdateTeam={handleUpdateTeam} allTeams={appState.teams} />}
             {activeTab === 'book-of-work' && <BookOfWork teams={viewState.teams} users={viewState.users} onUpdateTeam={handleUpdateTeam} />}
             {activeTab === 'working-groups' && <WorkingGroupModule groups={viewState.workingGroups || []} users={viewState.users} teams={viewState.teams} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onUpdateGroup={handleUpdateGroup} onDeleteGroup={handleDeleteGroup} />}
             {activeTab === 'weekly-report' && <WeeklyReport reports={viewState.weeklyReports} users={viewState.users} teams={viewState.teams} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onSaveReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />}
