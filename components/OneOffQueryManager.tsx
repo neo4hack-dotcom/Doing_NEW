@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { OneOffQuery, OneOffQueryStatus, OneOffQueryRequestSource, User, Team, LLMConfig, UserRole } from '../types';
 import { generateId } from '../services/storage';
-import { generateOneOffRecapEmail, generateOneOffAssignmentEmail } from '../services/llmService';
+import { generateOneOffRecapEmail, generateOneOffAssignmentEmail, extractOneOffQueryFromText } from '../services/llmService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -169,9 +169,10 @@ interface QueryFormModalProps {
   onSave: (q: OneOffQuery) => void;
   onClose: () => void;
   title: string;
+  isFromBot?: boolean; // When true, shows an AI-extraction banner at the top
 }
 
-const QueryFormModal: React.FC<QueryFormModalProps> = ({ initial, teams, users, currentUser, onSave, onClose, title }) => {
+const QueryFormModal: React.FC<QueryFormModalProps> = ({ initial, teams, users, currentUser, onSave, onClose, title, isFromBot }) => {
   const [form, setForm] = useState<OneOffQuery>(initial);
   const [tagInput, setTagInput] = useState('');
 
@@ -214,6 +215,19 @@ const QueryFormModal: React.FC<QueryFormModalProps> = ({ initial, teams, users, 
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
+
+          {/* AI extraction banner */}
+          {isFromBot && (
+            <div className="flex items-start gap-3 p-3 bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-800/50 rounded-xl">
+              <div className="w-7 h-7 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                <Bot className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-violet-700 dark:text-violet-300">AI-extracted data</p>
+                <p className="text-xs text-violet-600 dark:text-violet-400">Fields were extracted from your text. Empty fields could not be determined — please fill them in before saving.</p>
+              </div>
+            </div>
+          )}
 
           {/* ── Section: Identification ── */}
           <div className={section}>
@@ -508,6 +522,225 @@ const AIEmailModal: React.FC<AIEmailModalProps> = ({ content, title, onClose }) 
   );
 };
 
+// ── BotCreateOneOffModal ───────────────────────────────────────────────────────
+// Modal allowing the user to paste / type text or attach a file, then let the LLM
+// extract a pre-filled OneOffQuery. The user can then amend before saving.
+
+interface BotCreateOneOffModalProps {
+  teams: Team[];
+  users: User[];
+  currentUser: User;
+  llmConfig: LLMConfig;
+  onSave: (q: OneOffQuery) => void;
+  onClose: () => void;
+}
+
+const BotCreateOneOffModal: React.FC<BotCreateOneOffModalProps> = ({
+  teams, users, currentUser, llmConfig, onSave, onClose,
+}) => {
+  const [step, setStep] = useState<'input' | 'review'>('input');
+  const [inputText, setInputText] = useState('');
+  const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [draftQuery, setDraftQuery] = useState<OneOffQuery | null>(null);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [onClose]);
+
+  const defaultTeamId = useMemo(() => teams[0]?.id || '', [teams]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        setAttachedFile({ name: file.name, content: evt.target?.result as string });
+      };
+      reader.readAsText(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleExtract = async () => {
+    const combined = [
+      inputText.trim(),
+      attachedFile ? `\n\n[Attached file: ${attachedFile.name}]\n${attachedFile.content}` : '',
+    ].join('').trim();
+
+    if (!combined) {
+      setExtractError('Please enter some text or attach a file before extracting.');
+      return;
+    }
+
+    setIsExtracting(true);
+    setExtractError(null);
+
+    try {
+      const extracted = await extractOneOffQueryFromText(combined, llmConfig);
+
+      const now = new Date().toISOString();
+      const todayStr = now.split('T')[0];
+
+      const draft: OneOffQuery = {
+        id: '',
+        teamId: defaultTeamId,
+        title: extracted.title,
+        requester: extracted.requester,
+        requesterId: null,
+        sponsor: extracted.sponsor,
+        requestSource: (['email', 'teams', 'call', 'other'].includes(extracted.requestSource)
+          ? extracted.requestSource as OneOffQueryRequestSource
+          : undefined),
+        emailSubject: extracted.emailSubject || '',
+        emailReceivedAt: extracted.emailReceivedAt || '',
+        receivedAt: extracted.receivedAt || todayStr,
+        etaRequested: extracted.etaRequested || null,
+        description: extracted.description,
+        dataSource: extracted.dataSource,
+        eisenhowerQuadrant: (extracted.eisenhowerQuadrant && [1, 2, 3, 4].includes(extracted.eisenhowerQuadrant))
+          ? extracted.eisenhowerQuadrant as 1 | 2 | 3 | 4
+          : null,
+        tags: extracted.tags,
+        status: 'pending',
+        archived: false,
+        assignedToUserId: null,
+        assignedToFreeText: extracted.assignedToFreeText || '',
+        estimatedCostMD: extracted.estimatedCostMD,
+        finalCostMD: null,
+        sqlQuery: '',
+        tips: '',
+        createdByBot: true,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      setDraftQuery(draft);
+      setStep('review');
+    } catch (e: any) {
+      setExtractError(`Extraction failed: ${e.message}`);
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const inp = 'w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-violet-400';
+  const lbl = 'block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1';
+  const section = 'border border-gray-100 dark:border-gray-800 rounded-xl p-4 space-y-3';
+  const sectionTitle = 'text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5';
+
+  // ── REVIEW STEP: editable pre-filled form ──────────────────────────────────
+  if (step === 'review' && draftQuery) {
+    const handleReviewSave = (q: OneOffQuery) => {
+      onSave({ ...q, createdByBot: true });
+    };
+    return (
+      <QueryFormModal
+        initial={draftQuery}
+        teams={teams}
+        users={users}
+        currentUser={currentUser}
+        onSave={handleReviewSave}
+        onClose={onClose}
+        title="Review & Save — AI Extracted Request"
+        isFromBot
+      />
+    );
+  }
+
+  // ── INPUT STEP ─────────────────────────────────────────────────────────────
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl flex flex-col border border-gray-100 dark:border-gray-800" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+              <Bot className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 dark:text-white text-base">AI — Create One-Off Request</h3>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Paste text or attach a file — the AI will extract the request fields</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500"><X className="w-5 h-5" /></button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-4">
+
+          {/* Text input */}
+          <div className={section}>
+            <p className={sectionTitle}><FileText className="w-3.5 h-3.5" /> Paste or type content</p>
+            <textarea
+              value={inputText}
+              onChange={e => setInputText(e.target.value)}
+              rows={7}
+              className={inp + ' resize-y'}
+              placeholder="Paste an email body, a paragraph describing the request, a presentation excerpt…&#10;&#10;The AI will extract: title, requester, description, ETA, source, priority, tags, etc."
+            />
+          </div>
+
+          {/* File attachment */}
+          <div className={section}>
+            <p className={sectionTitle}><FileText className="w-3.5 h-3.5" /> Or attach a document</p>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-semibold cursor-pointer transition-colors border border-gray-200 dark:border-gray-700">
+                <FileText className="w-4 h-4" /> Choose file
+                <input type="file" accept=".txt,.md,.csv,.json,.xml,.html,.log" className="hidden" onChange={handleFileChange} />
+              </label>
+              {attachedFile ? (
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-xs text-gray-600 dark:text-gray-300 font-medium truncate">{attachedFile.name}</span>
+                  <button onClick={() => setAttachedFile(null)} className="text-gray-400 hover:text-red-500 shrink-0"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ) : (
+                <span className="text-xs text-gray-400">txt, md, csv, json, html, log…</span>
+              )}
+            </div>
+          </div>
+
+          {/* Error */}
+          {extractError && (
+            <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700 dark:text-red-300">{extractError}</p>
+            </div>
+          )}
+
+          {/* Info note */}
+          <div className="flex items-start gap-2 p-3 bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-800/50 rounded-lg">
+            <Sparkles className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-violet-700 dark:text-violet-300">
+              The AI will <strong>only</strong> extract information explicitly present in the text — it will never invent data. Empty fields will be left blank for you to fill in.
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 p-5 border-t border-gray-100 dark:border-gray-800">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
+          <button
+            onClick={handleExtract}
+            disabled={isExtracting || (!inputText.trim() && !attachedFile)}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors shadow-sm"
+          >
+            {isExtracting ? (
+              <><Sparkles className="w-4 h-4 animate-spin" /> Extracting…</>
+            ) : (
+              <><Sparkles className="w-4 h-4" /> Extract & Review</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── QueryCard ─────────────────────────────────────────────────────────────────
 
 interface QueryCardProps {
@@ -572,6 +805,11 @@ const QueryCard: React.FC<QueryCardProps> = ({ query, users, selected, onToggleS
                   {isOverdue && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
                       <AlertCircle className="w-3 h-3" /> Overdue
+                    </span>
+                  )}
+                  {query.createdByBot && (
+                    <span title="Created by AI Bot" className="inline-flex items-center justify-center w-4 h-4 bg-violet-500 text-white rounded-full shrink-0">
+                      <Bot className="w-2.5 h-2.5" />
                     </span>
                   )}
                 </div>
@@ -755,6 +993,7 @@ const OneOffQueryManager: React.FC<OneOffQueryManagerProps> = ({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isCreating, setIsCreating] = useState(false);
+  const [isBotCreating, setIsBotCreating] = useState(false);
   const [editingQuery, setEditingQuery] = useState<OneOffQuery | null>(null);
   const [createTeamId, setCreateTeamId] = useState('');
   const [aiLoading, setAiLoading] = useState<string | null>(null); // 'recap' | queryId
@@ -923,6 +1162,16 @@ const OneOffQueryManager: React.FC<OneOffQueryManagerProps> = ({
         <QueryFormModal initial={blankQuery(createTeamId)} teams={visibleTeams} users={users} currentUser={currentUser}
           onSave={handleCreate} onClose={() => setIsCreating(false)} title="New One Off Query" />
       )}
+      {isBotCreating && (
+        <BotCreateOneOffModal
+          teams={visibleTeams}
+          users={users}
+          currentUser={currentUser}
+          llmConfig={llmConfig}
+          onSave={q => { handleCreate(q); setIsBotCreating(false); }}
+          onClose={() => setIsBotCreating(false)}
+        />
+      )}
       {editingQuery && (
         <QueryFormModal initial={editingQuery} teams={visibleTeams} users={users} currentUser={currentUser}
           onSave={handleUpdate} onClose={() => setEditingQuery(null)} title="Edit Query" />
@@ -945,6 +1194,13 @@ const OneOffQueryManager: React.FC<OneOffQueryManagerProps> = ({
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-colors">
             <Download className="w-4 h-4" />
             Export CSV{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+          </button>
+          <button
+            onClick={() => setIsBotCreating(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-all"
+            title="Create a new request from text or attachment via AI"
+          >
+            <Bot className="w-4 h-4" /> AI Create
           </button>
           <button onClick={() => handleNewClick()}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-colors">
@@ -1028,9 +1284,14 @@ const OneOffQueryManager: React.FC<OneOffQueryManagerProps> = ({
           </div>
           <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">No one-off queries yet</h3>
           <p className="text-sm text-gray-400 mb-6">Start tracking ad-hoc data requests from your teams.</p>
-          <button onClick={() => handleNewClick()} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors">
-            <Plus className="w-4 h-4" /> New Query
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setIsBotCreating(true)} className="flex items-center gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm">
+              <Bot className="w-4 h-4" /> AI Create
+            </button>
+            <button onClick={() => handleNewClick()} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors">
+              <Plus className="w-4 h-4" /> New Query
+            </button>
+          </div>
         </div>
       ) : selectedTeamId !== 'all' ? (
         <div className="space-y-4">
