@@ -3,8 +3,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Bot, Search, CheckCircle2, Circle, AlertCircle, PauseCircle, XCircle,
   Trash2, Edit3, X, Tag, Link, Clock, Zap, Calendar, Repeat, Flag,
-  ChevronDown, ChevronUp, ExternalLink, Paperclip, Brain, LayoutGrid, List,
-  Filter, ArrowUp, ArrowRight, ArrowDown, Minus, Archive, ArchiveRestore, Sparkles, Shield
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ExternalLink, Paperclip, Brain, LayoutGrid, List,
+  Filter, ArrowUp, ArrowRight, ArrowDown, Minus, Archive, ArchiveRestore, Sparkles, Shield,
+  Download, CalendarClock, Mail
 } from 'lucide-react';
 import { SmartTodo, TodoStatus, TodoPriorityLevel, EnergyLevel, User, LLMConfig, AppNotification, UserRole } from '../types';
 import { generateId } from '../services/storage';
@@ -84,6 +85,16 @@ const ENERGY_CONFIG: Record<EnergyLevel, { icon: string; color: string }> = {
   low: { icon: '🍃', color: 'text-green-600 dark:text-green-400' },
 };
 
+const PLANNING_FOR_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  today:        { label: 'Today',        color: 'text-red-600 dark:text-red-400',     bg: 'bg-red-100 dark:bg-red-900/30' },
+  tomorrow:     { label: 'Tomorrow',     color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-900/30' },
+  this_week:    { label: 'This Week',    color: 'text-amber-600 dark:text-amber-400',  bg: 'bg-amber-100 dark:bg-amber-900/30' },
+  this_month:   { label: 'This Month',   color: 'text-blue-600 dark:text-blue-400',   bg: 'bg-blue-100 dark:bg-blue-900/30' },
+  this_quarter: { label: 'This Quarter', color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+  this_year:    { label: 'This Year',    color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-900/30' },
+  tbd:          { label: 'TBD',          color: 'text-gray-500 dark:text-gray-400',   bg: 'bg-gray-100 dark:bg-gray-800' },
+};
+
 // ── blank form ──────────────────────────────────────────────────────────────
 
 const blankForm = (userId: string): SmartTodo => ({
@@ -114,7 +125,305 @@ const blankForm = (userId: string): SmartTodo => ({
   startDate: null,
   dueDate: null,
   completedAt: null,
+  planningFor: null,
+  scheduledDateTime: null,
+  scheduledDuration: null,
 });
+
+// ── Outlook ICS Generator ───────────────────────────────────────────────────
+
+const formatICSDate = (isoString: string): string => {
+  // "2025-02-21T09:00:00.000Z" → "20250221T090000Z"
+  return isoString.replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace(/\.\d+$/, '');
+};
+
+const generateOutlookICS = (todo: SmartTodo, currentUser: User): void => {
+  const now = new Date();
+  const dtStamp = formatICSDate(now.toISOString());
+  const uid = `${todo.id}-${Date.now()}@doing-app`;
+
+  let dtStart: string;
+  let dtEnd: string;
+
+  if (todo.scheduledDateTime) {
+    const startDt = new Date(todo.scheduledDateTime);
+    const durationMs = (todo.scheduledDuration || 60) * 60 * 1000;
+    const endDt = new Date(startDt.getTime() + durationMs);
+    dtStart = formatICSDate(startDt.toISOString());
+    dtEnd = formatICSDate(endDt.toISOString());
+  } else if (todo.dueDate) {
+    dtStart = `${todo.dueDate.replace(/-/g, '')}T090000`;
+    dtEnd = `${todo.dueDate.replace(/-/g, '')}T100000`;
+  } else {
+    const d = new Date(now.getTime() + 86400000);
+    const ds = d.toISOString().split('T')[0].replace(/-/g, '');
+    dtStart = `${ds}T090000`;
+    dtEnd = `${ds}T100000`;
+  }
+
+  const priorityMap: Record<string, number> = { urgent: 1, high: 3, medium: 5, low: 9 };
+  const planLabel = todo.planningFor ? (PLANNING_FOR_CONFIG[todo.planningFor]?.label || todo.planningFor) : '';
+
+  const descLines = [
+    `[TASK] ${todo.title}`,
+    '',
+    todo.description ? `Description:\n${todo.description}` : '',
+    '',
+    `Priority: ${todo.priorityLevel.toUpperCase()}`,
+    todo.eisenhowerQuadrant
+      ? `Eisenhower Matrix: Q${todo.eisenhowerQuadrant} — ${QUADRANT_CONFIG[todo.eisenhowerQuadrant].label} (${QUADRANT_CONFIG[todo.eisenhowerQuadrant].sublabel})`
+      : '',
+    planLabel ? `Schedule Priority: ${planLabel}` : '',
+    todo.requester ? `Requester: ${todo.requester}` : '',
+    todo.sponsor ? `Sponsor: ${todo.sponsor}` : '',
+    todo.source ? `Source: ${todo.source}` : '',
+    todo.dueDate ? `Due Date: ${todo.dueDate}` : '',
+    todo.tags.length > 0 ? `Tags: #${todo.tags.join(' #')}` : '',
+    '',
+    `Created by: ${currentUser.firstName} ${currentUser.lastName} (${currentUser.functionTitle || currentUser.role})`,
+    `Generated via DOING App`,
+  ].filter(v => v !== undefined && v !== null && !(typeof v === 'string' && v === '' && false));
+
+  // ICS requires \n to be escaped as \\n in DESCRIPTION
+  const descICS = descLines.join('\n').replace(/\n/g, '\\n');
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//DOING App//SmartTodo//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${dtStamp}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:[${todo.priorityLevel.toUpperCase()}] ${todo.title}`,
+    `DESCRIPTION:${descICS}`,
+    `ORGANIZER;CN="${currentUser.firstName} ${currentUser.lastName}":MAILTO:${currentUser.uid.toLowerCase()}@company.com`,
+    `PRIORITY:${priorityMap[todo.priorityLevel] ?? 5}`,
+    todo.priorityLevel === 'urgent' ? 'X-MICROSOFT-CDO-IMPORTANCE:2' : 'X-MICROSOFT-CDO-IMPORTANCE:1',
+    'STATUS:CONFIRMED',
+    'TRANSP:OPAQUE',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ];
+
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `outlook-meeting-${todo.title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase().slice(0, 50)}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+// ── SchedulePickerModal ─────────────────────────────────────────────────────
+
+interface SchedulePickerModalProps {
+  initialDate: string | null;
+  initialHour: number;
+  initialDuration: number;
+  onSave: (isoDateTime: string, durationMin: number) => void;
+  onClear: () => void;
+  onClose: () => void;
+}
+
+const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
+  initialDate, initialHour, initialDuration, onSave, onClear, onClose,
+}) => {
+  const todayStr = today();
+  const [selectedDate, setSelectedDate] = useState(initialDate || todayStr);
+  const [selectedHour, setSelectedHour] = useState(initialHour || 9);
+  const [duration, setDuration] = useState(initialDuration || 60);
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const d = new Date(initialDate || todayStr);
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  const getDays = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDayRaw = new Date(year, month, 1).getDay();
+    const startOffset = (firstDayRaw + 6) % 7; // Monday = 0
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: (number | null)[] = [];
+    for (let i = 0; i < startOffset; i++) cells.push(null);
+    for (let i = 1; i <= daysInMonth; i++) cells.push(i);
+    return cells;
+  };
+
+  const handleSave = () => {
+    const isoDateTime = `${selectedDate}T${String(selectedHour).padStart(2, '0')}:00:00`;
+    onSave(isoDateTime, duration);
+  };
+
+  const monthLabel = currentMonth.toLocaleDateString('en', { month: 'long', year: 'numeric' });
+  const days = getDays();
+
+  const previewLabel = (() => {
+    const d = new Date(`${selectedDate}T${String(selectedHour).padStart(2, '0')}:00:00`);
+    const dateStr = d.toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const endH = selectedHour + Math.floor(duration / 60);
+    const endM = duration % 60;
+    const endLabel = `${endH}:${String(endM).padStart(2, '0')}`;
+    return `${dateStr} · ${selectedHour}:00 → ${endLabel}`;
+  })();
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 dark:border-gray-800 flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="w-5 h-5 text-indigo-500" />
+            <h3 className="font-bold text-gray-900 dark:text-white">Schedule Task</h3>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5 overflow-y-auto">
+          {/* Calendar */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <button
+                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+              >
+                <ChevronLeft className="w-4 h-4 text-gray-500" />
+              </button>
+              <span className="font-semibold text-sm text-gray-900 dark:text-white">{monthLabel}</span>
+              <button
+                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+              >
+                <ChevronRight className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Day headers */}
+            <div className="grid grid-cols-7 mb-1">
+              {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => (
+                <div key={d} className="text-center text-[10px] font-bold text-gray-400 py-1">{d}</div>
+              ))}
+            </div>
+
+            {/* Day cells */}
+            <div className="grid grid-cols-7 gap-1">
+              {days.map((day, i) => {
+                if (!day) return <div key={i} />;
+                const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isSelected = dateStr === selectedDate;
+                const isToday = dateStr === todayStr;
+                const isPast = dateStr < todayStr;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => !isPast && setSelectedDate(dateStr)}
+                    disabled={isPast}
+                    className={`aspect-square flex items-center justify-center rounded-lg text-xs font-medium transition-colors
+                      ${isSelected
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : isToday
+                        ? 'border-2 border-indigo-400 text-indigo-600 dark:text-indigo-400 font-bold'
+                        : isPast
+                        ? 'text-gray-300 dark:text-gray-700 cursor-not-allowed'
+                        : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-700 dark:text-gray-300'}`}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Time slots: 7h → 20h */}
+          <div>
+            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
+              Start Time
+            </label>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: 14 }, (_, i) => i + 7).map(h => (
+                <button
+                  key={h}
+                  onClick={() => setSelectedHour(h)}
+                  className={`py-1.5 rounded-lg text-[11px] font-semibold transition-colors
+                    ${selectedHour === h
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-gray-50 dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-700 dark:text-gray-300'}`}
+                >
+                  {h}h
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Duration */}
+          <div>
+            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
+              Duration
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {[30, 60, 90, 120, 150, 180, 240].map(d => (
+                <button
+                  key={d}
+                  onClick={() => setDuration(d)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
+                    ${duration === d
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-gray-50 dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-700 dark:text-gray-300'}`}
+                >
+                  {d < 60 ? `${d}min` : `${d / 60}h`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3">
+            <p className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase mb-0.5">Scheduled Slot</p>
+            <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">{previewLabel}</p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-2 p-5 border-t border-gray-100 dark:border-gray-800">
+          <button
+            onClick={onClear}
+            className="px-3 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            Clear
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ── TodoCard ────────────────────────────────────────────────────────────────
 
@@ -250,6 +559,23 @@ const TodoCard: React.FC<TodoCardProps> = ({ todo, onClick, onStatusToggle, onDe
             </span>
           )}
 
+          {/* Schedule Priority */}
+          {todo.planningFor && PLANNING_FOR_CONFIG[todo.planningFor] && (
+            <span className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${PLANNING_FOR_CONFIG[todo.planningFor].bg} ${PLANNING_FOR_CONFIG[todo.planningFor].color}`}>
+              <Flag className="w-2.5 h-2.5" />
+              {PLANNING_FOR_CONFIG[todo.planningFor].label}
+            </span>
+          )}
+
+          {/* Scheduled slot */}
+          {todo.scheduledDateTime && (
+            <span className="flex items-center gap-1 text-[11px] text-indigo-500 dark:text-indigo-400 font-medium">
+              <CalendarClock className="w-3 h-3" />
+              {new Date(todo.scheduledDateTime).toLocaleDateString('en', { month: 'short', day: 'numeric' })} {new Date(todo.scheduledDateTime).getHours()}h
+              {todo.scheduledDuration ? ` · ${todo.scheduledDuration < 60 ? `${todo.scheduledDuration}min` : `${todo.scheduledDuration / 60}h`}` : ''}
+            </span>
+          )}
+
           {/* Tags */}
           {todo.tags.slice(0, 3).map(t => (
             <span key={t} className="text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded">
@@ -283,6 +609,7 @@ const TodoFormModal: React.FC<TodoFormModalProps> = ({ initial, onSave, onClose,
   const [linkInput, setLinkInput] = useState('');
   const [attachName, setAttachName] = useState('');
   const [attachUrl, setAttachUrl] = useState('');
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
 
   // Escape key handler
   useEffect(() => {
@@ -446,6 +773,25 @@ const TodoFormModal: React.FC<TodoFormModalProps> = ({ initial, onSave, onClose,
             </div>
           </div>
 
+          {/* Schedule Priority */}
+          <div>
+            <label className={labelCls}>Schedule Priority</label>
+            <select
+              value={form.planningFor ?? ''}
+              onChange={e => set('planningFor', e.target.value || null)}
+              className={inputCls}
+            >
+              <option value="">— Not set —</option>
+              <option value="today">Today</option>
+              <option value="tomorrow">Tomorrow</option>
+              <option value="this_week">This Week</option>
+              <option value="this_month">This Month</option>
+              <option value="this_quarter">This Quarter</option>
+              <option value="this_year">This Year</option>
+              <option value="tbd">TBD</option>
+            </select>
+          </div>
+
           {/* Start + Due + Estimated */}
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -461,6 +807,68 @@ const TodoFormModal: React.FC<TodoFormModalProps> = ({ initial, onSave, onClose,
               <input type="number" min="0" value={form.estimatedDurationMin ?? ''} onChange={e => set('estimatedDurationMin', e.target.value ? Number(e.target.value) : null)} className={inputCls} placeholder="e.g. 90" />
             </div>
           </div>
+
+          {/* Schedule (calendar slot picker) */}
+          <div>
+            <label className={labelCls}>Scheduled Slot</label>
+            {form.scheduledDateTime ? (
+              <div className="flex items-center gap-3 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-700">
+                <CalendarClock className="w-4 h-4 text-indigo-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">
+                    {new Date(form.scheduledDateTime).toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400">
+                    {new Date(form.scheduledDateTime).getHours()}:00
+                    {form.scheduledDuration ? ` · ${form.scheduledDuration < 60 ? `${form.scheduledDuration}min` : `${form.scheduledDuration / 60}h`}` : ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSchedulePicker(true)}
+                  className="px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-200"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { set('scheduledDateTime', null); set('scheduledDuration', null); }}
+                  className="p-1 text-gray-400 hover:text-red-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowSchedulePicker(true)}
+                className="w-full flex items-center gap-2 p-3 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
+              >
+                <CalendarClock className="w-4 h-4" />
+                Click to schedule a time slot…
+              </button>
+            )}
+          </div>
+
+          {/* Schedule Picker Modal */}
+          {showSchedulePicker && (
+            <SchedulePickerModal
+              initialDate={form.scheduledDateTime ? form.scheduledDateTime.split('T')[0] : null}
+              initialHour={form.scheduledDateTime ? new Date(form.scheduledDateTime).getHours() : 9}
+              initialDuration={form.scheduledDuration || 60}
+              onSave={(isoDateTime, durationMin) => {
+                set('scheduledDateTime', isoDateTime);
+                set('scheduledDuration', durationMin);
+                setShowSchedulePicker(false);
+              }}
+              onClear={() => {
+                set('scheduledDateTime', null);
+                set('scheduledDuration', null);
+                setShowSchedulePicker(false);
+              }}
+              onClose={() => setShowSchedulePicker(false)}
+            />
+          )}
 
           {/* Source + Requester + Sponsor */}
           <div className="grid grid-cols-3 gap-3">
@@ -576,9 +984,10 @@ interface TodoDetailModalProps {
   onDelete: () => void;
   onStatusChange: (status: TodoStatus) => void;
   onArchiveToggle: () => void;
+  currentUser: User;
 }
 
-const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit, onDelete, onStatusChange, onArchiveToggle }) => {
+const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit, onDelete, onStatusChange, onArchiveToggle, currentUser }) => {
   const statusCfg = STATUS_CONFIG[todo.status];
   const overdue = isOverdue(todo);
 
@@ -724,6 +1133,26 @@ const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit
                 </p>
               </div>
             )}
+            {todo.planningFor && PLANNING_FOR_CONFIG[todo.planningFor] && (
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Schedule Priority</p>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${PLANNING_FOR_CONFIG[todo.planningFor].bg} ${PLANNING_FOR_CONFIG[todo.planningFor].color}`}>
+                  <Flag className="w-3 h-3" />
+                  {PLANNING_FOR_CONFIG[todo.planningFor].label}
+                </span>
+              </div>
+            )}
+            {todo.scheduledDateTime && (
+              <div className="col-span-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Scheduled Slot</p>
+                <p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                  <CalendarClock className="w-4 h-4" />
+                  {new Date(todo.scheduledDateTime).toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  {' · '}{new Date(todo.scheduledDateTime).getHours()}:00
+                  {todo.scheduledDuration ? ` — ${todo.scheduledDuration < 60 ? `${todo.scheduledDuration}min` : `${todo.scheduledDuration / 60}h`}` : ''}
+                </p>
+              </div>
+            )}
             {todo.source && (
               <div>
                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Source</p>
@@ -742,6 +1171,22 @@ const TodoDetailModal: React.FC<TodoDetailModalProps> = ({ todo, onClose, onEdit
                 <p className="text-sm text-gray-700 dark:text-gray-300">{todo.sponsor}</p>
               </div>
             )}
+          </div>
+
+          {/* AI Outlook Meeting */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800">
+            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-1">Outlook Meeting</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              Génère un fichier .ics importable directement dans Outlook pour créer un meeting avec tous les détails de cette tâche.
+              {!todo.scheduledDateTime && <span className="text-amber-600 dark:text-amber-400"> (Configurez un créneau schedulé pour une heure précise.)</span>}
+            </p>
+            <button
+              onClick={() => generateOutlookICS(todo, currentUser)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm"
+            >
+              <Download className="w-4 h-4" />
+              AI Outlook Meeting (.ics)
+            </button>
           </div>
 
           {/* Tags */}
@@ -934,6 +1379,7 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
 }) => {
   const [filterStatus, setFilterStatus] = useState<'all' | TodoStatus>('all');
   const [filterPriority, setFilterPriority] = useState<'all' | TodoPriorityLevel>('all');
+  const [filterPlanningFor, setFilterPlanningFor] = useState<'all' | string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'due_date' | 'priority' | 'created' | 'title'>('due_date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -973,6 +1419,7 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
 
     if (filterStatus !== 'all') result = result.filter(t => t.status === filterStatus);
     if (filterPriority !== 'all') result = result.filter(t => t.priorityLevel === filterPriority);
+    if (filterPlanningFor !== 'all') result = result.filter(t => (t.planningFor ?? 'none') === filterPlanningFor);
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -1141,6 +1588,7 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
           onDelete={() => handleDelete(selectedTodo.id)}
           onStatusChange={s => handleStatusChange(selectedTodo, s)}
           onArchiveToggle={() => handleArchiveToggle(selectedTodo)}
+          currentUser={currentUser}
         />
       )}
 
@@ -1244,6 +1692,22 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
+        </select>
+
+        {/* Schedule Priority filter */}
+        <select
+          value={filterPlanningFor}
+          onChange={e => setFilterPlanningFor(e.target.value)}
+          className="p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white"
+        >
+          <option value="all">All Schedules</option>
+          <option value="today">Today</option>
+          <option value="tomorrow">Tomorrow</option>
+          <option value="this_week">This Week</option>
+          <option value="this_month">This Month</option>
+          <option value="this_quarter">This Quarter</option>
+          <option value="this_year">This Year</option>
+          <option value="tbd">TBD</option>
         </select>
 
         {/* Sort */}
