@@ -1449,7 +1449,7 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
     });
 
     return result;
-  }, [todos, viewTab, filterStatus, filterPriority, searchQuery, sortBy, sortDir]);
+  }, [todos, viewTab, filterStatus, filterPriority, filterPlanningFor, searchQuery, sortBy, sortDir]);
 
   // ── Handlers ───────────────────────────────────────────────────────────
   const handleCreate = (form: SmartTodo) => {
