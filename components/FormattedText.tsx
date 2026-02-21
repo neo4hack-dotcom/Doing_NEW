@@ -18,7 +18,7 @@ const FormattedText: React.FC<FormattedTextProps> = ({ text, className = '' }) =
       if (part.startsWith('**') && part.endsWith('**')) {
         const innerText = part.slice(2, -2);
         const lowerText = innerText.toLowerCase();
-
+        
         let colorClass = "text-indigo-900 dark:text-indigo-200"; // Default bold color
 
         // Determine color based on keywords (English & French support)
@@ -36,8 +36,9 @@ const FormattedText: React.FC<FormattedTextProps> = ({ text, className = '' }) =
           </span>
         );
       }
-
+      
       // Handle Italics (*text*) and Underline (__text__) within non-bold parts
+      // We split by underline first, then italic
       const underlineParts = part.split(/(__.*?__)/g);
       return underlineParts.map((uPart, uIndex) => {
           if (uPart.startsWith('__') && uPart.endsWith('__')) {
@@ -62,37 +63,24 @@ const FormattedText: React.FC<FormattedTextProps> = ({ text, className = '' }) =
         const trimmed = line.trim();
         if (!trimmed) return <div key={idx} className="h-2" />; // Empty line
 
-        // Header detection: #, ##, ###, #### (Markdown headings)
-        const headerMatch = trimmed.match(/^(#{1,4})\s+(.+)/);
-        const isClassicHeader =
-                         (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 60) ||
-                         trimmed.startsWith('• Context') || trimmed.startsWith('• Key') ||
+        // Header detection (Markdown ### or specific keywords)
+        const isHeader = trimmed.startsWith('###') || 
+                         (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 60) || 
+                         trimmed.startsWith('• Context') || trimmed.startsWith('• Key') || 
                          trimmed.startsWith('• Contexte') || trimmed.startsWith('• À retenir');
 
-        if (headerMatch || isClassicHeader) {
-          let cleanText: string;
-          let level = 3;
-          if (headerMatch) {
-            level = headerMatch[1].length;
-            cleanText = headerMatch[2].replace(/\*\*/g, '').trim();
-          } else {
-            cleanText = trimmed.replace(/^#{1,4}\s*/, '').replace(/\*\*/g, '').trim();
-          }
-          const sizeClass = level === 1
-            ? 'text-base font-extrabold'
-            : level === 2
-            ? 'text-sm font-bold'
-            : 'text-xs font-bold';
+        if (isHeader) {
+          const cleanText = trimmed.replace(/^###\s*/, '').replace(/\*\*/g, '');
           return (
-            <h3 key={idx} className={`mt-4 mb-2 inline-block px-3 py-1 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/40 dark:to-purple-900/40 rounded-lg border-l-4 border-indigo-500 text-indigo-800 dark:text-indigo-100 shadow-sm ${sizeClass}`}>
+            <h3 key={idx} className="mt-4 mb-2 inline-block px-3 py-1 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/40 dark:to-purple-900/40 rounded-lg border-l-4 border-indigo-500 text-indigo-800 dark:text-indigo-100 font-bold shadow-sm">
               {cleanText}
             </h3>
           );
         }
 
         // List detection
-        if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.match(/^\d+\.\s/)) {
-            const content = trimmed.replace(/^[-•]\s+|^\d+\.\s+/, '');
+        if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.match(/^\d+\./)) {
+            const content = trimmed.replace(/^[-•\d+\.]\s*/, '');
             return (
                 <div key={idx} className="flex items-start gap-2 pl-2">
                     <span className="mt-1.5 w-1.5 h-1.5 bg-indigo-400 rounded-full flex-shrink-0" />

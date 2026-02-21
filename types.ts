@@ -241,7 +241,6 @@ export interface WorkingGroup {
 export type TodoStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
 export type TodoPriorityLevel = 'low' | 'medium' | 'high' | 'urgent';
 export type EnergyLevel = 'low' | 'medium' | 'high';
-export type PlanningPeriod = 'today' | 'tomorrow' | 'this_week' | 'this_month' | 'this_quarter' | 'this_year' | 'tbd';
 
 export interface TodoAttachment {
   name: string;
@@ -277,9 +276,6 @@ export interface SmartTodo {
   startDate: string | null;
   dueDate: string | null;
   completedAt: string | null;
-  planningFor?: PlanningPeriod | null;
-  scheduledDateTime?: string | null;  // ISO datetime for scheduled slot start
-  scheduledDuration?: number | null;  // Duration in minutes
 }
 
 // --- TYPES DE NOTIFICATION ---
