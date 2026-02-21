@@ -306,13 +306,18 @@ export interface AppNotification {
 
 // --- ONE OFF QUERIES ---
 export type OneOffQueryStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
+export type OneOffQueryRequestSource = 'email' | 'teams' | 'call' | 'other';
 
 export interface OneOffQuery {
   id: string;
   teamId: string; // Team this query belongs to
+  title: string; // Primary visible title of the request
   requester: string; // Free text name of requester
   requesterId?: string | null; // Optional: linked user ID
   sponsor: string; // Sponsor / commanditaire
+  requestSource?: OneOffQueryRequestSource; // Source: email, teams, call, other
+  emailSubject?: string; // Subject line of source email
+  emailReceivedAt?: string; // Date+time the email/request was received (ISO datetime)
   receivedAt: string; // ISO date — date de réception
   etaRequested: string | null; // ETA demandé par le requester (ISO date)
   description: string; // Detailed description
@@ -320,9 +325,13 @@ export interface OneOffQuery {
   eisenhowerQuadrant: 1 | 2 | 3 | 4 | null;
   tags: string[];
   status: OneOffQueryStatus;
+  archived?: boolean; // If true, excluded from KPIs
   assignedToUserId?: string | null; // Reference to a known user
   assignedToFreeText?: string; // Free text if not a known user
-  cost?: number | null; // Estimated or actual cost
+  estimatedCostMD?: number | null; // Estimated cost in Man Days
+  finalCostMD?: number | null; // Final/actual cost in Man Days
+  sqlQuery?: string; // SQL code once the query is completed
+  tips?: string; // Tips/hints to find the data
   selected?: boolean; // UI selection for batch AI email
   createdAt: string;
   updatedAt: string;

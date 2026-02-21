@@ -1331,15 +1331,16 @@ const QUADRANT_LABEL: Record<number, string> = {
 };
 
 const formatQueryForPrompt = (q: OneOffQuery, assigneeName?: string): string =>
-  `• Title/ID: ${q.id}
+  `• Title: ${q.title || q.id}
   Requester: ${q.requester}${q.sponsor ? ` | Sponsor: ${q.sponsor}` : ''}
+  Source: ${q.requestSource || 'N/A'}${q.emailSubject ? ` | Email subject: ${q.emailSubject}` : ''}
   Received: ${q.receivedAt}${q.etaRequested ? ` | ETA Requested: ${q.etaRequested}` : ''}
   Status: ${q.status}
   Eisenhower: ${q.eisenhowerQuadrant ? QUADRANT_LABEL[q.eisenhowerQuadrant] : 'Not classified'}
   Data Source: ${q.dataSource || 'N/A'}
   Tags: ${q.tags.length > 0 ? q.tags.join(', ') : 'None'}
   Assigned to: ${assigneeName || q.assignedToFreeText || 'Unassigned'}
-  Cost: ${q.cost != null ? `${q.cost}` : 'N/A'}
+  Estimated Cost: ${q.estimatedCostMD != null ? `${q.estimatedCostMD} MD` : 'N/A'} | Final Cost: ${q.finalCostMD != null ? `${q.finalCostMD} MD` : 'N/A'}
   Description:
   ${q.description}`;
 
