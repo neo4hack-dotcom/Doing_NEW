@@ -300,6 +300,30 @@ export interface AppNotification {
   seenBy: string[];
 }
 
+// --- ONE OFF QUERIES ---
+export type OneOffQueryStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
+
+export interface OneOffQuery {
+  id: string;
+  teamId: string; // Team this query belongs to
+  requester: string; // Free text name of requester
+  requesterId?: string | null; // Optional: linked user ID
+  sponsor: string; // Sponsor / commanditaire
+  receivedAt: string; // ISO date — date de réception
+  etaRequested: string | null; // ETA demandé par le requester (ISO date)
+  description: string; // Detailed description
+  dataSource: string; // Data source
+  eisenhowerQuadrant: 1 | 2 | 3 | 4 | null;
+  tags: string[];
+  status: OneOffQueryStatus;
+  assignedToUserId?: string | null; // Reference to a known user
+  assignedToFreeText?: string; // Free text if not a known user
+  cost?: number | null; // Estimated or actual cost
+  selected?: boolean; // UI selection for batch AI email
+  createdAt: string;
+  updatedAt: string;
+}
+
 // --- CONFIGURATION SYSTÈME ---
 // Message système affiché globalement dans l'application
 export interface SystemMessage {
@@ -317,6 +341,7 @@ export interface AppState {
   weeklyReports: WeeklyReport[]; // Rapports hebdomadaires
   workingGroups: WorkingGroup[]; // Groupes de travail avec sessions
   smartTodos: SmartTodo[]; // Tâches personnelles intelligentes
+  oneOffQueries: OneOffQuery[]; // Demandes ponctuelles (One off queries)
   notifications: AppNotification[]; // Notifications système
   dismissedAlerts: { [key: string]: string }; // Alertes rejetées (clé -> date ISO), stocké localement par utilisateur
   systemMessage?: SystemMessage; // Message système global

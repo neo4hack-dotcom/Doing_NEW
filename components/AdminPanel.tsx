@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User, UserRole, Team } from '../types';
-import { Plus, Trash2, User as UserIcon, Shield, ChevronDown, ChevronRight, Users, Briefcase, Pencil, Save, X, MapPin, Key } from 'lucide-react';
+import { Plus, Trash2, User as UserIcon, Shield, ChevronDown, ChevronRight, Users, Briefcase, Pencil, Save, X, MapPin, Key, Search } from 'lucide-react';
 
 interface AdminPanelProps {
   users: User[];
@@ -78,6 +78,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
     location: '',
     password: ''
   });
+
+  // Search states
+  const [userSearch, setUserSearch] = useState('');
+  const [teamSearch, setTeamSearch] = useState('');
 
   // Team Management State
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
@@ -192,6 +196,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
 
   const rootUsers = users.filter(u => !u.managerId);
   const potentialManagers = users.filter(u => u.role === UserRole.MANAGER || u.role === UserRole.ADMIN);
+
+  // Sorted + filtered directory
+  const sortedFilteredUsers = useMemo(() => {
+    const q = userSearch.toLowerCase();
+    return [...users]
+      .filter(u =>
+        !q ||
+        u.lastName.toLowerCase().includes(q) ||
+        u.firstName.toLowerCase().includes(q) ||
+        u.uid.toLowerCase().includes(q) ||
+        u.functionTitle.toLowerCase().includes(q)
+      )
+      .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
+  }, [users, userSearch]);
+
+  // Sorted + filtered teams
+  const sortedFilteredTeams = useMemo(() => {
+    const q = teamSearch.toLowerCase();
+    return [...teams]
+      .filter(t => !q || t.name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const mA = users.find(u => u.id === a.managerId);
+        const mB = users.find(u => u.id === b.managerId);
+        const nameA = mA ? `${mA.lastName} ${mA.firstName}` : 'zzz';
+        const nameB = mB ? `${mB.lastName} ${mB.firstName}` : 'zzz';
+        return nameA.localeCompare(nameB);
+      });
+  }, [teams, users, teamSearch]);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -326,10 +358,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
                 
                 {/* Quick List */}
                 <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                    <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Directory</h2>
-                    <div className="overflow-y-auto max-h-[500px] pr-2">
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Directory</h2>
+                    <div className="relative mb-4">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                            value={userSearch}
+                            onChange={e => setUserSearch(e.target.value)}
+                            placeholder="Search by name, UID, title..."
+                            className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white"
+                        />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mb-3 uppercase font-semibold tracking-wide">Sorted by last name — {sortedFilteredUsers.length} result{sortedFilteredUsers.length !== 1 ? 's' : ''}</p>
+                    <div className="overflow-y-auto max-h-[460px] pr-2">
                         <div className="space-y-3">
-                            {users.map(u => (
+                            {sortedFilteredUsers.map(u => (
                                 <div key={u.id} className={`flex items-center justify-between p-3 rounded-lg border hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${editingUserId === u.id ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-100 dark:border-slate-700/50'}`}>
                                     <div className="flex items-center overflow-hidden">
                                         <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-500 dark:text-slate-400 mr-3 flex-shrink-0">
@@ -419,8 +461,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
               </div>
 
               {/* Teams List */}
+              <div className="mb-4">
+                  <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                          value={teamSearch}
+                          onChange={e => setTeamSearch(e.target.value)}
+                          placeholder="Search by team name..."
+                          className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white"
+                      />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2 uppercase font-semibold tracking-wide">Sorted by manager — {sortedFilteredTeams.length} team{sortedFilteredTeams.length !== 1 ? 's' : ''}</p>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {teams.map(team => {
+                  {sortedFilteredTeams.map(team => {
                       const manager = users.find(u => u.id === team.managerId);
                       const isEditing = editingTeamId === team.id;
                       return (

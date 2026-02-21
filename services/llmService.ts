@@ -1,5 +1,5 @@
 
-import { Team, User, TaskStatus, LLMConfig, Meeting, WeeklyReport, ChatMessage, Project, WorkingGroup, ActionItemStatus, SmartTodo } from "../types";
+import { Team, User, TaskStatus, LLMConfig, Meeting, WeeklyReport, ChatMessage, Project, WorkingGroup, ActionItemStatus, SmartTodo, OneOffQuery } from "../types";
 
 // --- PROMPTS PAR DÉFAUT ---
 // Chaque prompt correspond à un cas d'usage spécifique (rapports, réunions, etc.)
@@ -1319,6 +1319,133 @@ Only include items that actually exist in the report. If a section is empty or N
         console.error("extractLiveItemsFromReport parse error", e);
         return [];
     }
+};
+
+// ── ONE OFF QUERIES — AI EMAIL GENERATION ────────────────────────────────────
+
+const QUADRANT_LABEL: Record<number, string> = {
+  1: 'Q1: Do Now (Urgent & Important)',
+  2: 'Q2: Schedule (Not Urgent & Important)',
+  3: 'Q3: Delegate (Urgent & Not Important)',
+  4: 'Q4: Eliminate (Not Urgent & Not Important)',
+};
+
+const formatQueryForPrompt = (q: OneOffQuery, assigneeName?: string): string =>
+  `• Title/ID: ${q.id}
+  Requester: ${q.requester}${q.sponsor ? ` | Sponsor: ${q.sponsor}` : ''}
+  Received: ${q.receivedAt}${q.etaRequested ? ` | ETA Requested: ${q.etaRequested}` : ''}
+  Status: ${q.status}
+  Eisenhower: ${q.eisenhowerQuadrant ? QUADRANT_LABEL[q.eisenhowerQuadrant] : 'Not classified'}
+  Data Source: ${q.dataSource || 'N/A'}
+  Tags: ${q.tags.length > 0 ? q.tags.join(', ') : 'None'}
+  Assigned to: ${assigneeName || q.assignedToFreeText || 'Unassigned'}
+  Cost: ${q.cost != null ? `${q.cost}` : 'N/A'}
+  Description:
+  ${q.description}`;
+
+/**
+ * Generates a summary recap email listing the selected queries (to share with stakeholders).
+ */
+export const generateOneOffRecapEmail = async (
+  queries: OneOffQuery[],
+  users: User[],
+  senderName: string,
+  config: LLMConfig
+): Promise<string> => {
+  const queriesText = queries.map(q => {
+    const assignee = q.assignedToUserId ? users.find(u => u.id === q.assignedToUserId) : null;
+    const assigneeName = assignee ? `${assignee.firstName} ${assignee.lastName}` : undefined;
+    return formatQueryForPrompt(q, assigneeName);
+  }).join('\n\n');
+
+  const prompt = `You are an expert executive assistant. Write a professional summary email recapping the selected one-off data requests listed below.
+
+SENDER: ${senderName}
+NUMBER OF REQUESTS: ${queries.length}
+
+REQUESTS:
+${queriesText}
+
+TASK:
+Write a concise, professional email summarizing these requests for management / stakeholders.
+
+FORMAT:
+Subject: [One-Off Queries] Status Summary — <today's date>
+
+Dear [Team / Stakeholders],
+
+[Opening sentence presenting the purpose of this summary]
+
+[For each request, one compact paragraph or bullet covering: requester, description summary, ETA, status, assigned to, Eisenhower priority]
+
+[Closing sentence mentioning next steps or availability for questions]
+
+Best regards,
+${senderName}
+
+Rules:
+- Be factual and professional
+- Use bullet points for clarity where appropriate
+- Do not invent information
+- Write in English
+`;
+
+  return runPrompt(prompt, config);
+};
+
+/**
+ * Generates an assignment email to send to a collaborator asking them to handle a query.
+ */
+export const generateOneOffAssignmentEmail = async (
+  query: OneOffQuery,
+  assignee: User | null,
+  assigneeFreeText: string,
+  senderName: string,
+  config: LLMConfig
+): Promise<string> => {
+  const assigneeName = assignee
+    ? `${assignee.firstName} ${assignee.lastName}`
+    : assigneeFreeText || 'Collaborator';
+
+  const queryText = formatQueryForPrompt(query, assigneeName);
+
+  const prompt = `You are an expert executive assistant. Write a clear, professional email to a collaborator asking them to handle a one-off data request.
+
+SENDER: ${senderName}
+RECIPIENT: ${assigneeName}${assignee?.functionTitle ? ` (${assignee.functionTitle})` : ''}
+
+REQUEST DETAILS:
+${queryText}
+
+TASK:
+Write an email from ${senderName} to ${assigneeName} asking them to process this data request.
+The email must:
+1. Briefly introduce the request and its context
+2. Clearly state the description of what is needed
+3. Mention the data source to use: ${query.dataSource || 'N/A'}
+4. Mention the ETA requested by the client: ${query.etaRequested || 'No specific deadline'}
+5. Mention the requester: ${query.requester}${query.sponsor ? ` (sponsored by ${query.sponsor})` : ''}
+6. Specify the Eisenhower priority: ${query.eisenhowerQuadrant ? QUADRANT_LABEL[query.eisenhowerQuadrant] : 'Not classified'}
+7. Ask for acknowledgement and estimated completion date
+8. Be professional and courteous
+
+FORMAT:
+Subject: [Action Required] Data Request — <short description from the request>
+
+Hi ${assigneeName},
+
+[Body of the email]
+
+Best regards,
+${senderName}
+
+Rules:
+- Be professional and clear
+- Do not invent information not in the data
+- Write in English
+`;
+
+  return runPrompt(prompt, config);
 };
 
 export const fetchOllamaModels = async (baseUrl: string): Promise<string[]> => {
