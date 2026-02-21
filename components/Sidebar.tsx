@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Briefcase, Settings, BarChart3, LogOut, BookOpen, Layers, Library, ClipboardList, LayoutDashboard, Users, CheckSquare, LayoutGrid } from 'lucide-react';
+import { Briefcase, Settings, BarChart3, LogOut, BookOpen, Layers, Library, ClipboardList, LayoutDashboard, Users, CheckSquare, LayoutGrid, Zap } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface SidebarProps {
@@ -49,8 +49,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, onTabChange, 
             </button>
         )}
 
-        <div className="pt-4 pb-1">
-            <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Workspace</p>
+        <div className="pt-4 pb-2 mt-2 border-t border-gray-100 dark:border-gray-800">
+            <p className="px-4 pt-2 text-[11px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Workspace</p>
         </div>
 
         {/* Sub-category: Project management */}
@@ -76,6 +76,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, onTabChange, 
         <button onClick={() => onTabChange('smart-todo')} className={navItemClass('smart-todo')}>
           <CheckSquare className="w-4 h-4 mr-3" />
           Smart To Do
+        </button>
+
+        <button onClick={() => onTabChange('one-off-queries')} className={navItemClass('one-off-queries')}>
+          <Zap className="w-4 h-4 mr-3" />
+          One Off Queries
         </button>
 
         <button onClick={() => onTabChange('weekly-report')} className={navItemClass('weekly-report')}>

@@ -1,5 +1,5 @@
 
-import { User, Team, Meeting, UserRole, TaskStatus, TaskPriority, ProjectStatus, ProjectRole, ActionItemStatus, AppState, LLMConfig, WeeklyReport, AppNotification, WorkingGroup, SmartTodo } from '../types';
+import { User, Team, Meeting, UserRole, TaskStatus, TaskPriority, ProjectStatus, ProjectRole, ActionItemStatus, AppState, LLMConfig, WeeklyReport, AppNotification, WorkingGroup, SmartTodo, OneOffQuery } from '../types';
 
 // Clé de stockage local pour les données de l'application
 const STORAGE_KEY = 'teamsync_data_v15';
@@ -35,6 +35,7 @@ export const sanitizeAppState = (data: any): AppState => {
         weeklyReports: Array.isArray(data.weeklyReports) ? data.weeklyReports : [],
         workingGroups: Array.isArray(data.workingGroups) ? data.workingGroups : [],
         smartTodos: Array.isArray(data.smartTodos) ? data.smartTodos : [],
+        oneOffQueries: Array.isArray(data.oneOffQueries) ? data.oneOffQueries : [],
         notifications: Array.isArray(data.notifications) ? data.notifications : [],
         dismissedAlerts: data.dismissedAlerts && typeof data.dismissedAlerts === 'object' ? data.dismissedAlerts : {},
         systemMessage: data.systemMessage || { active: false, content: '', level: 'info' },
@@ -152,6 +153,7 @@ const getDefaultState = (): AppState => {
         weeklyReports: [],
         workingGroups: [],
         smartTodos: [],
+        oneOffQueries: [],
         notifications: [],
         dismissedAlerts: {},
         systemMessage: { active: false, content: '', level: 'info' },
