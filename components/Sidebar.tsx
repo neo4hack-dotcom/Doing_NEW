@@ -12,14 +12,16 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, onTabChange, onLogout }) => {
   const isAdmin = currentUser?.role === UserRole.ADMIN;
-  const showManagement = isAdmin; 
+  const showManagement = isAdmin;
 
   const navItemClass = (tab: string) => `
     flex items-center w-full px-4 py-2.5 mb-1 transition-colors rounded-md text-sm
-    ${activeTab === tab 
-      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 font-semibold' 
+    ${activeTab === tab
+      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 font-semibold'
       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 font-medium'}
   `;
+
+  const subSectionHeaderClass = "px-4 pt-3 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider";
 
   return (
     <div className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 h-screen fixed left-0 top-0 flex flex-col z-50">
@@ -51,6 +53,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, onTabChange, 
             <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Workspace</p>
         </div>
 
+        {/* Sub-category: Project management */}
+        <p className={subSectionHeaderClass}>Project management</p>
+
         <button onClick={() => onTabChange('projects')} className={navItemClass('projects')}>
           <Briefcase className="w-4 h-4 mr-3" />
           Projects & Tasks
@@ -61,29 +66,34 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, onTabChange, 
           Kanban
         </button>
 
-        <button onClick={() => onTabChange('book-of-work')} className={navItemClass('book-of-work')}>
-          <Library className="w-4 h-4 mr-3" />
-          Book of Work
+        {isAdmin && (
+          <button onClick={() => onTabChange('book-of-work')} className={navItemClass('book-of-work')}>
+            <Library className="w-4 h-4 mr-3" />
+            Book of Work
+          </button>
+        )}
+
+        <button onClick={() => onTabChange('smart-todo')} className={navItemClass('smart-todo')}>
+          <CheckSquare className="w-4 h-4 mr-3" />
+          Smart To Do
         </button>
 
-        <button onClick={() => onTabChange('working-groups')} className={navItemClass('working-groups')}>
-          <Users className="w-4 h-4 mr-3" />
-          Working Groups
-        </button>
-        
         <button onClick={() => onTabChange('weekly-report')} className={navItemClass('weekly-report')}>
           <ClipboardList className="w-4 h-4 mr-3" />
           Weekly Report
         </button>
 
-        <button onClick={() => onTabChange('meetings')} className={navItemClass('meetings')}>
-          <BookOpen className="w-4 h-4 mr-3" />
-          Meetings
+        {/* Sub-category: Tools */}
+        <p className={subSectionHeaderClass}>Tools</p>
+
+        <button onClick={() => onTabChange('working-groups')} className={navItemClass('working-groups')}>
+          <Users className="w-4 h-4 mr-3" />
+          Working Groups
         </button>
 
-        <button onClick={() => onTabChange('smart-todo')} className={navItemClass('smart-todo')}>
-          <CheckSquare className="w-4 h-4 mr-3" />
-          Smart To Do
+        <button onClick={() => onTabChange('meetings')} className={navItemClass('meetings')}>
+          <BookOpen className="w-4 h-4 mr-3" />
+          Minutes
         </button>
 
         {isAdmin && (
