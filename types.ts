@@ -333,6 +333,7 @@ export interface OneOffQuery {
   sqlQuery?: string; // SQL code once the query is completed
   tips?: string; // Tips/hints to find the data
   selected?: boolean; // UI selection for batch AI email
+  createdByBot?: boolean; // Visual indicator — created via AI extraction (read-only)
   createdAt: string;
   updatedAt: string;
 }

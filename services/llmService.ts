@@ -1449,6 +1449,112 @@ Rules:
   return runPrompt(prompt, config);
 };
 
+/**
+ * Extracts structured OneOffQuery fields from a free-text description
+ * (email body, presentation notes, pasted paragraph, attached file content…).
+ * The LLM must NOT invent data — missing fields are returned as empty strings / null.
+ */
+export const extractOneOffQueryFromText = async (
+    text: string,
+    config: LLMConfig
+): Promise<{
+    title: string;
+    requester: string;
+    sponsor: string;
+    requestSource: string;
+    emailSubject: string;
+    emailReceivedAt: string;
+    receivedAt: string;
+    etaRequested: string;
+    description: string;
+    dataSource: string;
+    eisenhowerQuadrant: number | null;
+    tags: string[];
+    assignedToFreeText: string;
+    estimatedCostMD: number | null;
+}> => {
+    const today = new Date().toISOString().split('T')[0];
+    const prompt = `
+You are a One-Off Data Request Extraction Assistant. Analyze the following text (which may come from an email, a presentation, a pasted message, or an attached document) and extract structured information to fill a one-off data request form.
+
+TEXT TO ANALYZE:
+${text}
+
+CRITICAL RULES:
+1. Extract ONLY information that is explicitly present or clearly implied in the text. Do NOT invent, guess, or hallucinate any data.
+2. If a field cannot be determined from the text, return it as an empty string "" or null. Never fill a field with invented data.
+3. For requestSource, use ONLY one of: "email", "teams", "call", "other". If not determinable, use "".
+4. For eisenhowerQuadrant: 1=Urgent+Important(Do Now), 2=Not Urgent+Important(Schedule), 3=Urgent+Not Important(Delegate), 4=Not Urgent+Not Important(Eliminate). Use null if not determinable.
+5. Dates should be in YYYY-MM-DD format. For emailReceivedAt use ISO datetime YYYY-MM-DDTHH:MM if a time is available, otherwise just YYYY-MM-DD. Use "" if not found.
+6. For estimatedCostMD, extract numeric man-days if explicitly mentioned (e.g. "0.5 MD", "2 days"). Use null if not found.
+7. For tags, extract relevant keywords or topic labels from the text (lowercase, no # prefix). Return [] if none found.
+8. Today's date is ${today} — use this as a reference for relative dates.
+9. The "description" field should be a clear, concise reformulation of what is being requested.
+10. The "title" should be a short (max 10 words) descriptive label for the request.
+
+RETURN ONLY A VALID JSON OBJECT. NO MARKDOWN. NO CODE BLOCKS. NO EXPLANATION.
+
+Required JSON structure:
+{
+  "title": "Short descriptive title of the request",
+  "requester": "Name of the person making the request",
+  "sponsor": "Sponsor or commanditaire if mentioned",
+  "requestSource": "",
+  "emailSubject": "Subject line of the source email if applicable",
+  "emailReceivedAt": "",
+  "receivedAt": "${today}",
+  "etaRequested": "",
+  "description": "Concise description of what data/analysis is needed",
+  "dataSource": "Data source, system or database mentioned",
+  "eisenhowerQuadrant": null,
+  "tags": ["tag1", "tag2"],
+  "assignedToFreeText": "Person mentioned as analyst/assignee if any",
+  "estimatedCostMD": null
+}
+`;
+
+    const rawResponse = await runPrompt(prompt, config);
+
+    try {
+        const cleanJson = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        return {
+            title: parsed.title || '',
+            requester: parsed.requester || '',
+            sponsor: parsed.sponsor || '',
+            requestSource: parsed.requestSource || '',
+            emailSubject: parsed.emailSubject || '',
+            emailReceivedAt: parsed.emailReceivedAt || '',
+            receivedAt: parsed.receivedAt || today,
+            etaRequested: parsed.etaRequested || '',
+            description: parsed.description || '',
+            dataSource: parsed.dataSource || '',
+            eisenhowerQuadrant: parsed.eisenhowerQuadrant != null ? Number(parsed.eisenhowerQuadrant) : null,
+            tags: Array.isArray(parsed.tags) ? parsed.tags.map((t: any) => String(t).toLowerCase()) : [],
+            assignedToFreeText: parsed.assignedToFreeText || '',
+            estimatedCostMD: parsed.estimatedCostMD != null ? Number(parsed.estimatedCostMD) : null,
+        };
+    } catch (e) {
+        console.error("Failed to parse OneOffQuery extraction JSON", rawResponse);
+        return {
+            title: '',
+            description: rawResponse,
+            requester: '',
+            sponsor: '',
+            requestSource: '',
+            emailSubject: '',
+            emailReceivedAt: '',
+            receivedAt: today,
+            etaRequested: '',
+            dataSource: '',
+            eisenhowerQuadrant: null,
+            tags: [],
+            assignedToFreeText: '',
+            estimatedCostMD: null,
+        };
+    }
+};
+
 export const fetchOllamaModels = async (baseUrl: string): Promise<string[]> => {
   try {
     const url = baseUrl || 'http://localhost:11434';
