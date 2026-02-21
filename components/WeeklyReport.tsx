@@ -8,6 +8,7 @@ import WeeklyReportForm from './weekly-report/WeeklyReportForm';
 import ReportCard from './weekly-report/ReportCard';
 import AutoFillModal from './weekly-report/AutoFillModal';
 import AiResultModal from './weekly-report/AiResultModal';
+import AiAutoBuildModal from './weekly-report/AiAutoBuildModal';
 import LanguagePickerModal from './LanguagePickerModal';
 
 interface WeeklyReportProps {
@@ -36,6 +37,9 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
   const [showAutoFillModal, setShowAutoFillModal] = useState(false);
   const [selectedReportIdsForFill, setSelectedReportIdsForFill] = useState<string[]>([]);
   const [isFilling, setIsFilling] = useState(false);
+
+  // AI Auto Build State
+  const [showAiAutoBuildModal, setShowAiAutoBuildModal] = useState(false);
 
   // Language Picker State
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
@@ -318,11 +322,39 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
       }
   };
 
+  // AI Auto Build handler
+  const handleAiAutoBuildApply = (updates: Partial<WeeklyReportType>) => {
+      setCurrentReport(prev => {
+          // Append items to existing sections (don't replace if there's content)
+          const merged: WeeklyReportType = { ...prev };
+          (Object.keys(updates) as Array<keyof WeeklyReportType>).forEach(key => {
+              const existing = (prev as any)[key] as string || '';
+              const newContent = (updates as any)[key] as string || '';
+              if (existing.trim()) {
+                  (merged as any)[key] = existing + '\n\n' + newContent;
+              } else {
+                  (merged as any)[key] = newContent;
+              }
+          });
+          return merged;
+      });
+      setIsDirty(true);
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 relative">
-        
+
         {/* Modals */}
-        <AutoFillModal 
+        <AiAutoBuildModal
+            isOpen={showAiAutoBuildModal}
+            onClose={() => setShowAiAutoBuildModal(false)}
+            myReports={myHistory}
+            currentReportId={currentReport.id}
+            llmConfig={llmConfig!}
+            onApply={handleAiAutoBuildApply}
+        />
+
+        <AutoFillModal
             isOpen={showAutoFillModal}
             onClose={() => setShowAutoFillModal(false)}
             recentReportsByUser={reportsByUserForAutoFill}
@@ -390,6 +422,7 @@ const WeeklyReport: React.FC<WeeklyReportProps> = ({ reports, users, currentUser
                     onDelete={() => handleDelete(currentReport.id)}
                     onResetToCurrent={handleResetToCurrent}
                     onAutoFill={() => setShowAutoFillModal(true)}
+                    onAiAutoBuild={llmConfig ? () => setShowAiAutoBuildModal(true) : undefined}
                     onManagerSynthesis={() => askLanguageThen((lang) => handleManagerSynthesis(lang))}
                     onGenerateEmail={() => askLanguageThen((lang) => handleGenerateEmail(currentReport, lang))}
                     onSaveFeedback={isAdmin ? handleSaveFeedback : undefined}
