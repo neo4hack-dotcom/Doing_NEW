@@ -1,14 +1,16 @@
 
 import React from 'react';
-import { Team, TaskStatus, SystemMessage } from '../types';
-import { CheckCircle2, Circle, Clock, AlertCircle, Megaphone, Info, AlertTriangle } from 'lucide-react';
+import { Team, TaskStatus, SystemMessage, SmartTodo, OneOffQuery } from '../types';
+import { CheckCircle2, Circle, Clock, AlertCircle, Megaphone, Info, AlertTriangle, ListTodo, Search } from 'lucide-react';
 
 interface KPIDashboardProps {
   teams: Team[];
   systemMessage?: SystemMessage;
+  smartTodos?: SmartTodo[];
+  oneOffQueries?: OneOffQuery[];
 }
 
-const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage }) => {
+const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smartTodos = [], oneOffQueries = [] }) => {
   // --- Data Aggregation ---
   let totalTasks = 0;
   let totalClosed = 0;
@@ -32,6 +34,19 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage }) => 
   });
 
   const completionRate = totalTasks > 0 ? Math.round((totalClosed / totalTasks) * 100) : 0;
+
+  // --- SmartTodo KPI Aggregation ---
+  const activeTodos = smartTodos.filter(t => !t.isArchived && t.status !== 'cancelled');
+  const todoInProgress = activeTodos.filter(t => t.status === 'in_progress').length;
+  const todoBlocked = activeTodos.filter(t => t.status === 'blocked').length;
+  const todoDone = activeTodos.filter(t => t.status === 'done').length;
+  const todoPending = activeTodos.filter(t => t.status === 'todo').length;
+
+  // --- OneOffQuery KPI Aggregation ---
+  const activeQueries = oneOffQueries.filter(q => !q.archived && q.status !== 'cancelled');
+  const queryPending = activeQueries.filter(q => q.status === 'pending').length;
+  const queryInProgress = activeQueries.filter(q => q.status === 'in_progress').length;
+  const queryDone = activeQueries.filter(q => q.status === 'done').length;
 
   // --- Components for Native Charts ---
 
@@ -236,6 +251,81 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage }) => 
                  </div>
              </div>
         </div>
+      </div>
+
+      {/* SMART TODO KPIs */}
+      <div>
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <ListTodo className="w-5 h-5 text-indigo-500" />
+          My To-Do List
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Total Active</p>
+            <span className="text-3xl font-extrabold text-slate-900 dark:text-white">{activeTodos.length}</span>
+            <p className="text-xs text-slate-400 mt-1">Non-archived tasks</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-blue-200 dark:border-blue-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-500 mb-2">In Progress</p>
+            <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">{todoInProgress}</span>
+            <p className="text-xs text-slate-400 mt-1">Currently working on</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-red-200 dark:border-red-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-red-500 mb-2">Blocked</p>
+            <span className="text-3xl font-extrabold text-red-600 dark:text-red-400">{todoBlocked}</span>
+            <p className="text-xs text-slate-400 mt-1">Waiting / blocked</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-emerald-200 dark:border-emerald-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-2">Done</p>
+            <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">{todoDone}</span>
+            <p className="text-xs text-slate-400 mt-1">Completed tasks</p>
+          </div>
+        </div>
+        {activeTodos.length > 0 && (
+          <div className="mt-3 h-2.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full flex overflow-hidden">
+            {todoDone > 0 && <div style={{width: `${(todoDone / activeTodos.length) * 100}%`}} className="bg-emerald-500 h-full" title={`Done: ${todoDone}`} />}
+            {todoInProgress > 0 && <div style={{width: `${(todoInProgress / activeTodos.length) * 100}%`}} className="bg-blue-500 h-full" title={`In Progress: ${todoInProgress}`} />}
+            {todoBlocked > 0 && <div style={{width: `${(todoBlocked / activeTodos.length) * 100}%`}} className="bg-red-500 h-full" title={`Blocked: ${todoBlocked}`} />}
+            {todoPending > 0 && <div style={{width: `${(todoPending / activeTodos.length) * 100}%`}} className="bg-slate-300 dark:bg-slate-600 h-full" title={`To Do: ${todoPending}`} />}
+          </div>
+        )}
+      </div>
+
+      {/* ONE-OFF QUERY KPIs */}
+      <div>
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <Search className="w-5 h-5 text-violet-500" />
+          My One-Off Queries
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Total Active</p>
+            <span className="text-3xl font-extrabold text-slate-900 dark:text-white">{activeQueries.length}</span>
+            <p className="text-xs text-slate-400 mt-1">Non-archived queries</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-amber-200 dark:border-amber-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-500 mb-2">Pending</p>
+            <span className="text-3xl font-extrabold text-amber-600 dark:text-amber-400">{queryPending}</span>
+            <p className="text-xs text-slate-400 mt-1">Awaiting treatment</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-blue-200 dark:border-blue-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-500 mb-2">In Progress</p>
+            <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">{queryInProgress}</span>
+            <p className="text-xs text-slate-400 mt-1">Currently being handled</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-emerald-200 dark:border-emerald-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-2">Done</p>
+            <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">{queryDone}</span>
+            <p className="text-xs text-slate-400 mt-1">Delivered queries</p>
+          </div>
+        </div>
+        {activeQueries.length > 0 && (
+          <div className="mt-3 h-2.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full flex overflow-hidden">
+            {queryDone > 0 && <div style={{width: `${(queryDone / activeQueries.length) * 100}%`}} className="bg-emerald-500 h-full" title={`Done: ${queryDone}`} />}
+            {queryInProgress > 0 && <div style={{width: `${(queryInProgress / activeQueries.length) * 100}%`}} className="bg-blue-500 h-full" title={`In Progress: ${queryInProgress}`} />}
+            {queryPending > 0 && <div style={{width: `${(queryPending / activeQueries.length) * 100}%`}} className="bg-amber-400 h-full" title={`Pending: ${queryPending}`} />}
+          </div>
+        )}
       </div>
     </div>
   );

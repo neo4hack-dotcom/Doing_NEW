@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { Team, User, WeeklyReport, LLMConfig, Meeting, WorkingGroup, AppNotification } from '../types';
+import { Team, User, WeeklyReport, LLMConfig, Meeting, WorkingGroup, AppNotification, OneOffQuery } from '../types';
 import { generateManagementInsight, generateRiskAssessment } from '../services/llmService';
-import { Briefcase, CheckCircle2, ShieldAlert, Zap, LayoutList, Bell, Eye, ClipboardList, AlertTriangle, Clock } from 'lucide-react';
+import { Briefcase, CheckCircle2, ShieldAlert, Zap, LayoutList, Bell, Eye, ClipboardList, AlertTriangle, Clock, Search } from 'lucide-react';
 
 import LanguagePickerModal from './LanguagePickerModal';
 import ManagementStats from './management/ManagementStats';
@@ -24,9 +24,10 @@ interface ManagementDashboardProps {
   notifications: AppNotification[];
   currentUserId: string;
   onMarkNotificationSeen: (notificationId: string) => void;
+  oneOffQueries?: OneOffQuery[];
 }
 
-const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users, reports, meetings, workingGroups, llmConfig, onUpdateReport, onUpdateTeam, notifications, currentUserId, onMarkNotificationSeen }) => {
+const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users, reports, meetings, workingGroups, llmConfig, onUpdateReport, onUpdateTeam, notifications, currentUserId, onMarkNotificationSeen, oneOffQueries = [] }) => {
   const [selectedReport, setSelectedReport] = useState<WeeklyReport | null>(null);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
 
@@ -42,6 +43,11 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users,
   // Language Picker State
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const [pendingLlmAction, setPendingLlmAction] = useState<((lang: 'fr' | 'en') => void) | null>(null);
+
+  // --- Global One-Off Query KPIs ---
+  const activeGlobalQueries = oneOffQueries.filter(q => !q.archived && q.status !== 'cancelled');
+  const globalQueryPending = activeGlobalQueries.filter(q => q.status === 'pending').length;
+  const globalQueryInProgress = activeGlobalQueries.filter(q => q.status === 'in_progress').length;
 
   const askLanguageThen = (action: (lang: 'fr' | 'en') => void) => {
       setPendingLlmAction(() => action);
@@ -138,6 +144,40 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ teams, users,
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in relative pb-10">
+
+        {/* GLOBAL ONE-OFF QUERIES KPI */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 border border-violet-200 dark:border-violet-800 rounded-2xl p-5 flex items-center gap-4 shadow-sm">
+            <div className="bg-violet-100 dark:bg-violet-800/40 rounded-xl p-3 shrink-0">
+              <Search className="w-6 h-6 text-violet-600 dark:text-violet-300" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-500 dark:text-violet-400 mb-1">One-Off Queries en cours</p>
+              <span className="text-4xl font-extrabold text-violet-700 dark:text-violet-200">{globalQueryPending + globalQueryInProgress}</span>
+              <p className="text-xs text-violet-500 dark:text-violet-400 mt-1">Tous utilisateurs confondus</p>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-5 flex items-center gap-4 shadow-sm">
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3 shrink-0">
+              <Clock className="w-6 h-6 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-500 mb-1">En attente</p>
+              <span className="text-4xl font-extrabold text-amber-600 dark:text-amber-400">{globalQueryPending}</span>
+              <p className="text-xs text-slate-400 mt-1">Queries à traiter</p>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-900/40 rounded-2xl p-5 flex items-center gap-4 shadow-sm">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 shrink-0">
+              <Zap className="w-6 h-6 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-500 mb-1">En traitement</p>
+              <span className="text-4xl font-extrabold text-blue-600 dark:text-blue-400">{globalQueryInProgress}</span>
+              <p className="text-xs text-slate-400 mt-1">Queries en cours</p>
+            </div>
+          </div>
+        </div>
 
         {/* NOTIFICATION CENTER (Admin) */}
         {unseenNotifications.length > 0 && (
