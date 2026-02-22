@@ -1612,7 +1612,7 @@ const SmartTodoManager: React.FC<SmartTodoManagerProps> = ({
             className="flex items-center gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-all"
           >
             <Bot className="w-4 h-4" />
-            AI Extract
+            AI create
           </button>
           <button
             onClick={() => setIsCreating(true)}

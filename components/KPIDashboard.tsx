@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Team, TaskStatus, SystemMessage, SmartTodo, OneOffQuery } from '../types';
-import { CheckCircle2, Circle, Clock, AlertCircle, Megaphone, Info, AlertTriangle, ListTodo, Search } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, AlertCircle, Megaphone, Info, AlertTriangle, ListTodo, Search, BarChart3 } from 'lucide-react';
 
 interface KPIDashboardProps {
   teams: Team[];
@@ -217,7 +217,13 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
         )}
       </div>
 
-      {/* PROJECT KPI Row */}
+      {/* PROJECTS FOLLOW-UP */}
+      <div>
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-teal-500" />
+          Projects follow-up
+        </h3>
+        <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
             title="Completion Rate"
@@ -325,6 +331,8 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
                      <span className="font-bold text-slate-700 dark:text-white">{totalBlocked}</span>
                  </div>
              </div>
+        </div>
+      </div>
         </div>
       </div>
     </div>
