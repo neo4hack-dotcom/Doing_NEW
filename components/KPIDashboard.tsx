@@ -51,21 +51,21 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
   // --- Components for Native Charts ---
 
   const StatCard = ({ title, value, subtext, colorClass, icon: Icon }: any) => (
-    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
-        <div className="flex justify-between items-start mb-4">
+    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
+        <div className="flex justify-between items-start mb-2">
             <h3 className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">{title}</h3>
-            {Icon && <Icon className={`w-5 h-5 ${colorClass} opacity-80`} />}
+            {Icon && <Icon className={`w-4 h-4 ${colorClass} opacity-80`} />}
         </div>
         <div>
-            <span className={`text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white`}>{value}</span>
-            <p className="text-xs text-slate-400 mt-1">{subtext}</p>
+            <span className={`text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white`}>{value}</span>
+            <p className="text-xs text-slate-400 mt-0.5">{subtext}</p>
         </div>
     </div>
   );
 
   // Simple Native Donut Chart using SVG
   const DonutChart = () => {
-    const radius = 70;
+    const radius = 60;
     const circumference = 2 * Math.PI * radius;
     let accumulatedPercent = 0;
 
@@ -77,7 +77,7 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
     ].filter(d => d.value > 0);
 
     return (
-      <div className="relative w-64 h-64 flex items-center justify-center">
+      <div className="relative w-52 h-52 flex items-center justify-center">
         <svg className="w-full h-full transform -rotate-90">
           {data.map((item, index) => {
             const percent = item.value / totalTasks;
@@ -93,7 +93,7 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
                 r={radius}
                 fill="transparent"
                 stroke="currentColor"
-                strokeWidth="20"
+                strokeWidth="18"
                 strokeDasharray={dashArray}
                 strokeDashoffset={dashOffset}
                 className={`${item.color} transition-all duration-1000 ease-out`}
@@ -102,7 +102,7 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-4xl font-bold text-slate-900 dark:text-white">{totalTasks}</span>
+          <span className="text-3xl font-bold text-slate-900 dark:text-white">{totalTasks}</span>
           <span className="text-xs text-slate-500 uppercase font-semibold">Total Tasks</span>
         </div>
       </div>
@@ -126,14 +126,14 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in">
-      
+    <div className="space-y-5 max-w-7xl mx-auto animate-in fade-in">
+
       {/* SYSTEM BROADCAST MESSAGE */}
       {systemMessage?.active && systemMessage.content && (
-          <div className={`p-4 rounded-xl border flex items-start gap-4 shadow-sm animate-in slide-in-from-top-4 ${getSystemMessageStyle(systemMessage.level)}`}>
+          <div className={`p-3 rounded-xl border flex items-start gap-3 shadow-sm animate-in slide-in-from-top-4 ${getSystemMessageStyle(systemMessage.level)}`}>
               {getSystemMessageIcon(systemMessage.level)}
               <div className="flex-1">
-                  <h4 className="font-bold text-sm uppercase tracking-wide mb-1 flex items-center">
+                  <h4 className="font-bold text-sm uppercase tracking-wide mb-0.5 flex items-center">
                       <Megaphone className="w-4 h-4 mr-2" />
                       System Announcement
                   </h4>
@@ -142,51 +142,126 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
           </div>
       )}
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard 
-            title="Completion Rate" 
-            value={`${completionRate}%`} 
+      {/* SMART TODO KPIs */}
+      <div>
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+          <ListTodo className="w-4 h-4 text-indigo-500" />
+          My To-Do List
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Total Active</p>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">{activeTodos.length}</span>
+            <p className="text-xs text-slate-400 mt-0.5">Non-archived tasks</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-blue-200 dark:border-blue-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-500 mb-1">In Progress</p>
+            <span className="text-2xl font-extrabold text-blue-600 dark:text-blue-400">{todoInProgress}</span>
+            <p className="text-xs text-slate-400 mt-0.5">Currently working on</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-red-200 dark:border-red-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-red-500 mb-1">Blocked</p>
+            <span className="text-2xl font-extrabold text-red-600 dark:text-red-400">{todoBlocked}</span>
+            <p className="text-xs text-slate-400 mt-0.5">Waiting / blocked</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-emerald-200 dark:border-emerald-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-1">Done</p>
+            <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{todoDone}</span>
+            <p className="text-xs text-slate-400 mt-0.5">Completed tasks</p>
+          </div>
+        </div>
+        {activeTodos.length > 0 && (
+          <div className="mt-2 h-2 w-full bg-slate-100 dark:bg-slate-700 rounded-full flex overflow-hidden">
+            {todoDone > 0 && <div style={{width: `${(todoDone / activeTodos.length) * 100}%`}} className="bg-emerald-500 h-full" title={`Done: ${todoDone}`} />}
+            {todoInProgress > 0 && <div style={{width: `${(todoInProgress / activeTodos.length) * 100}%`}} className="bg-blue-500 h-full" title={`In Progress: ${todoInProgress}`} />}
+            {todoBlocked > 0 && <div style={{width: `${(todoBlocked / activeTodos.length) * 100}%`}} className="bg-red-500 h-full" title={`Blocked: ${todoBlocked}`} />}
+            {todoPending > 0 && <div style={{width: `${(todoPending / activeTodos.length) * 100}%`}} className="bg-slate-300 dark:bg-slate-600 h-full" title={`To Do: ${todoPending}`} />}
+          </div>
+        )}
+      </div>
+
+      {/* ONE-OFF QUERY KPIs */}
+      <div>
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+          <Search className="w-4 h-4 text-violet-500" />
+          My One-Off Queries
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Total Active</p>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">{activeQueries.length}</span>
+            <p className="text-xs text-slate-400 mt-0.5">Non-archived queries</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-amber-200 dark:border-amber-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-500 mb-1">Pending</p>
+            <span className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">{queryPending}</span>
+            <p className="text-xs text-slate-400 mt-0.5">Awaiting treatment</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-blue-200 dark:border-blue-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-500 mb-1">In Progress</p>
+            <span className="text-2xl font-extrabold text-blue-600 dark:text-blue-400">{queryInProgress}</span>
+            <p className="text-xs text-slate-400 mt-0.5">Currently being handled</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-emerald-200 dark:border-emerald-900/40 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-1">Done</p>
+            <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{queryDone}</span>
+            <p className="text-xs text-slate-400 mt-0.5">Delivered queries</p>
+          </div>
+        </div>
+        {activeQueries.length > 0 && (
+          <div className="mt-2 h-2 w-full bg-slate-100 dark:bg-slate-700 rounded-full flex overflow-hidden">
+            {queryDone > 0 && <div style={{width: `${(queryDone / activeQueries.length) * 100}%`}} className="bg-emerald-500 h-full" title={`Done: ${queryDone}`} />}
+            {queryInProgress > 0 && <div style={{width: `${(queryInProgress / activeQueries.length) * 100}%`}} className="bg-blue-500 h-full" title={`In Progress: ${queryInProgress}`} />}
+            {queryPending > 0 && <div style={{width: `${(queryPending / activeQueries.length) * 100}%`}} className="bg-amber-400 h-full" title={`Pending: ${queryPending}`} />}
+          </div>
+        )}
+      </div>
+
+      {/* PROJECT KPI Row */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <StatCard
+            title="Completion Rate"
+            value={`${completionRate}%`}
             icon={CheckCircle2}
             colorClass="text-emerald-500"
             subtext="Global completion"
         />
-        <StatCard 
-            title="Active Work" 
-            value={totalOngoing} 
+        <StatCard
+            title="Active Work"
+            value={totalOngoing}
             icon={Circle}
             colorClass="text-blue-500"
             subtext="Tasks in progress"
         />
-        <StatCard 
-            title="Bottlenecks" 
-            value={totalBlocked} 
+        <StatCard
+            title="Bottlenecks"
+            value={totalBlocked}
             icon={AlertCircle}
             colorClass="text-red-500"
             subtext="Blocked tasks"
         />
-        <StatCard 
-            title="Total Scope" 
-            value={totalTasks} 
+        <StatCard
+            title="Total Scope"
+            value={totalTasks}
             icon={Clock}
             colorClass="text-slate-400"
             subtext="Total tasks recorded"
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
         {/* Native Stacked Bar Chart for Team Workload */}
-        <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 lg:col-span-2">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Team Workload Distribution</h3>
-            <div className="space-y-6">
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 lg:col-span-2">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Team Workload Distribution</h3>
+            <div className="space-y-4">
                 {teams.map(team => {
                     let tDone = 0, tProg = 0, tBlock = 0, tTodo = 0;
-                    
+
                     // Filter archived projects before aggregation
                     const activeProjects = team.projects.filter(p => !p.isArchived);
-                    
-                    if (activeProjects.length === 0) return null; // Or show empty state for team if needed
+
+                    if (activeProjects.length === 0) return null;
 
                     activeProjects.forEach(p => {
                         p.tasks.forEach(t => {
@@ -201,11 +276,11 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
 
                     return (
                         <div key={team.id}>
-                            <div className="flex justify-between text-sm mb-2">
+                            <div className="flex justify-between text-xs mb-1.5">
                                 <span className="font-semibold text-slate-700 dark:text-slate-200">{team.name}</span>
                                 <span className="text-slate-500">{tTotal} tasks</span>
                             </div>
-                            <div className="h-4 w-full bg-slate-100 dark:bg-slate-700 rounded-full flex overflow-hidden">
+                            <div className="h-3 w-full bg-slate-100 dark:bg-slate-700 rounded-full flex overflow-hidden">
                                 {tDone > 0 && <div style={{width: `${(tDone/tTotal)*100}%`}} className="bg-emerald-500 h-full" title={`Done: ${tDone}`}></div>}
                                 {tProg > 0 && <div style={{width: `${(tProg/tTotal)*100}%`}} className="bg-blue-500 h-full" title={`In Progress: ${tProg}`}></div>}
                                 {tBlock > 0 && <div style={{width: `${(tBlock/tTotal)*100}%`}} className="bg-red-500 h-full" title={`Blocked: ${tBlock}`}></div>}
@@ -216,116 +291,41 @@ const KPIDashboard: React.FC<KPIDashboardProps> = ({ teams, systemMessage, smart
                 })}
                 {teams.length === 0 && <p className="text-slate-400 italic">No teams defined.</p>}
             </div>
-            
+
             {/* Legend */}
-            <div className="flex flex-wrap gap-4 mt-8 justify-center">
-                <div className="flex items-center text-xs text-slate-600 dark:text-slate-300"><span className="w-3 h-3 bg-emerald-500 rounded-full mr-2"></span>Done</div>
-                <div className="flex items-center text-xs text-slate-600 dark:text-slate-300"><span className="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>In Progress</div>
-                <div className="flex items-center text-xs text-slate-600 dark:text-slate-300"><span className="w-3 h-3 bg-red-500 rounded-full mr-2"></span>Blocked</div>
-                <div className="flex items-center text-xs text-slate-600 dark:text-slate-300"><span className="w-3 h-3 bg-slate-300 dark:bg-slate-600 rounded-full mr-2"></span>To Do</div>
+            <div className="flex flex-wrap gap-4 mt-5 justify-center">
+                <div className="flex items-center text-xs text-slate-600 dark:text-slate-300"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-full mr-1.5"></span>Done</div>
+                <div className="flex items-center text-xs text-slate-600 dark:text-slate-300"><span className="w-2.5 h-2.5 bg-blue-500 rounded-full mr-1.5"></span>In Progress</div>
+                <div className="flex items-center text-xs text-slate-600 dark:text-slate-300"><span className="w-2.5 h-2.5 bg-red-500 rounded-full mr-1.5"></span>Blocked</div>
+                <div className="flex items-center text-xs text-slate-600 dark:text-slate-300"><span className="w-2.5 h-2.5 bg-slate-300 dark:bg-slate-600 rounded-full mr-1.5"></span>To Do</div>
             </div>
         </div>
 
         {/* Native Donut Chart */}
-        <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 self-start">Global Health</h3>
-            
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4 self-start">Global Health</h3>
+
             {totalTasks > 0 ? <DonutChart /> : (
-                <div className="h-64 w-full flex items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-full">
+                <div className="h-52 w-full flex items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-full">
                     No Data (Active Projects)
                 </div>
             )}
 
-             <div className="w-full space-y-3 mt-8">
-                 <div className="flex justify-between items-center text-sm border-b border-slate-100 dark:border-slate-700 pb-2">
-                     <div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2 bg-emerald-500"></div>Done</div>
+             <div className="w-full space-y-2 mt-4">
+                 <div className="flex justify-between items-center text-xs border-b border-slate-100 dark:border-slate-700 pb-1.5">
+                     <div className="flex items-center"><div className="w-2.5 h-2.5 rounded-full mr-2 bg-emerald-500"></div>Done</div>
                      <span className="font-bold text-slate-700 dark:text-white">{totalClosed}</span>
                  </div>
-                 <div className="flex justify-between items-center text-sm border-b border-slate-100 dark:border-slate-700 pb-2">
-                     <div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2 bg-blue-500"></div>In Progress</div>
+                 <div className="flex justify-between items-center text-xs border-b border-slate-100 dark:border-slate-700 pb-1.5">
+                     <div className="flex items-center"><div className="w-2.5 h-2.5 rounded-full mr-2 bg-blue-500"></div>In Progress</div>
                      <span className="font-bold text-slate-700 dark:text-white">{totalOngoing}</span>
                  </div>
-                 <div className="flex justify-between items-center text-sm border-b border-slate-100 dark:border-slate-700 pb-2">
-                     <div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2 bg-red-500"></div>Blocked</div>
+                 <div className="flex justify-between items-center text-xs border-b border-slate-100 dark:border-slate-700 pb-1.5">
+                     <div className="flex items-center"><div className="w-2.5 h-2.5 rounded-full mr-2 bg-red-500"></div>Blocked</div>
                      <span className="font-bold text-slate-700 dark:text-white">{totalBlocked}</span>
                  </div>
              </div>
         </div>
-      </div>
-
-      {/* SMART TODO KPIs */}
-      <div>
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <ListTodo className="w-5 h-5 text-indigo-500" />
-          My To-Do List
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Total Active</p>
-            <span className="text-3xl font-extrabold text-slate-900 dark:text-white">{activeTodos.length}</span>
-            <p className="text-xs text-slate-400 mt-1">Non-archived tasks</p>
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-blue-200 dark:border-blue-900/40 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-500 mb-2">In Progress</p>
-            <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">{todoInProgress}</span>
-            <p className="text-xs text-slate-400 mt-1">Currently working on</p>
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-red-200 dark:border-red-900/40 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-red-500 mb-2">Blocked</p>
-            <span className="text-3xl font-extrabold text-red-600 dark:text-red-400">{todoBlocked}</span>
-            <p className="text-xs text-slate-400 mt-1">Waiting / blocked</p>
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-emerald-200 dark:border-emerald-900/40 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-2">Done</p>
-            <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">{todoDone}</span>
-            <p className="text-xs text-slate-400 mt-1">Completed tasks</p>
-          </div>
-        </div>
-        {activeTodos.length > 0 && (
-          <div className="mt-3 h-2.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full flex overflow-hidden">
-            {todoDone > 0 && <div style={{width: `${(todoDone / activeTodos.length) * 100}%`}} className="bg-emerald-500 h-full" title={`Done: ${todoDone}`} />}
-            {todoInProgress > 0 && <div style={{width: `${(todoInProgress / activeTodos.length) * 100}%`}} className="bg-blue-500 h-full" title={`In Progress: ${todoInProgress}`} />}
-            {todoBlocked > 0 && <div style={{width: `${(todoBlocked / activeTodos.length) * 100}%`}} className="bg-red-500 h-full" title={`Blocked: ${todoBlocked}`} />}
-            {todoPending > 0 && <div style={{width: `${(todoPending / activeTodos.length) * 100}%`}} className="bg-slate-300 dark:bg-slate-600 h-full" title={`To Do: ${todoPending}`} />}
-          </div>
-        )}
-      </div>
-
-      {/* ONE-OFF QUERY KPIs */}
-      <div>
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <Search className="w-5 h-5 text-violet-500" />
-          My One-Off Queries
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Total Active</p>
-            <span className="text-3xl font-extrabold text-slate-900 dark:text-white">{activeQueries.length}</span>
-            <p className="text-xs text-slate-400 mt-1">Non-archived queries</p>
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-amber-200 dark:border-amber-900/40 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-amber-500 mb-2">Pending</p>
-            <span className="text-3xl font-extrabold text-amber-600 dark:text-amber-400">{queryPending}</span>
-            <p className="text-xs text-slate-400 mt-1">Awaiting treatment</p>
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-blue-200 dark:border-blue-900/40 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-500 mb-2">In Progress</p>
-            <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">{queryInProgress}</span>
-            <p className="text-xs text-slate-400 mt-1">Currently being handled</p>
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-emerald-200 dark:border-emerald-900/40 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-2">Done</p>
-            <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">{queryDone}</span>
-            <p className="text-xs text-slate-400 mt-1">Delivered queries</p>
-          </div>
-        </div>
-        {activeQueries.length > 0 && (
-          <div className="mt-3 h-2.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full flex overflow-hidden">
-            {queryDone > 0 && <div style={{width: `${(queryDone / activeQueries.length) * 100}%`}} className="bg-emerald-500 h-full" title={`Done: ${queryDone}`} />}
-            {queryInProgress > 0 && <div style={{width: `${(queryInProgress / activeQueries.length) * 100}%`}} className="bg-blue-500 h-full" title={`In Progress: ${queryInProgress}`} />}
-            {queryPending > 0 && <div style={{width: `${(queryPending / activeQueries.length) * 100}%`}} className="bg-amber-400 h-full" title={`Pending: ${queryPending}`} />}
-          </div>
-        )}
       </div>
     </div>
   );
