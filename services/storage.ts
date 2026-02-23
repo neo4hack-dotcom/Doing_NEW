@@ -73,6 +73,7 @@ export const sanitizeAppState = (data: any): AppState => {
     // Sanitize teams and their projects
     state.teams = state.teams.map((team: any) => ({
         ...team,
+        sharedWith: Array.isArray(team.sharedWith) ? team.sharedWith : [],
         projects: Array.isArray(team.projects) ? team.projects.map((p: any) => ({
             ...p,
             members: Array.isArray(p.members) ? p.members : [],

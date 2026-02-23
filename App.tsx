@@ -133,8 +133,11 @@ const getFilteredState = (state: AppState): AppState => {
         });
 
         const iManageTeam = accessibleUserIds.includes(team.managerId);
+        // Accès explicite accordé par l'admin à cet utilisateur sur toute l'équipe
+        const hasTeamAccess = (team.sharedWith || []).includes(myId);
 
-        if (iManageTeam) {
+        if (iManageTeam || hasTeamAccess) {
+            // Accès complet : tous les projets visibles et éditables
             return team;
         } else if (visibleProjects.length > 0) {
             return { ...team, projects: visibleProjects };
