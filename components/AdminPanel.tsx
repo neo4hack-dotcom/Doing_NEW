@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { User, UserRole, Team } from '../types';
-import { Plus, Trash2, User as UserIcon, Shield, ChevronDown, ChevronRight, Users, Briefcase, Pencil, Save, X, MapPin, Key, Search } from 'lucide-react';
+import { Plus, Trash2, User as UserIcon, Shield, ChevronDown, ChevronRight, Users, Briefcase, Pencil, Save, X, MapPin, Key, Search, UserCheck, UserPlus } from 'lucide-react';
 
 interface AdminPanelProps {
   users: User[];
@@ -85,10 +85,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
 
   // Team Management State
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
-  const [teamForm, setTeamForm] = useState<{name: string, managerId: string}>({
+  const [teamForm, setTeamForm] = useState<{name: string, managerId: string, sharedWith: string[]}>({
       name: '',
-      managerId: ''
+      managerId: '',
+      sharedWith: []
   });
+  const [teamSharedWithSearch, setTeamSharedWithSearch] = useState('');
 
   const handleSaveUser = () => {
     if (userForm.firstName && userForm.lastName && userForm.uid && userForm.functionTitle) {
@@ -162,7 +164,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
                   onUpdateTeam({
                       ...existingTeam,
                       name: teamForm.name,
-                      managerId: teamForm.managerId
+                      managerId: teamForm.managerId,
+                      sharedWith: teamForm.sharedWith
                   });
               }
               setEditingTeamId(null);
@@ -172,10 +175,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
                   id: Date.now().toString(),
                   name: teamForm.name,
                   managerId: teamForm.managerId,
+                  sharedWith: teamForm.sharedWith,
                   projects: []
               });
           }
-          setTeamForm({ name: '', managerId: '' });
+          setTeamForm({ name: '', managerId: '', sharedWith: [] });
+          setTeamSharedWithSearch('');
       }
   };
 
@@ -183,15 +188,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
       setEditingTeamId(team.id);
       setTeamForm({
           name: team.name,
-          managerId: team.managerId
+          managerId: team.managerId,
+          sharedWith: team.sharedWith || []
       });
+      setTeamSharedWithSearch('');
       // Scroll to top to see form
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCancelTeamEdit = () => {
       setEditingTeamId(null);
-      setTeamForm({ name: '', managerId: '' });
+      setTeamForm({ name: '', managerId: '', sharedWith: [] });
+      setTeamSharedWithSearch('');
+  };
+
+  // Toggle a user in the sharedWith list for the team form
+  const handleToggleTeamSharedUser = (userId: string) => {
+      setTeamForm(prev => {
+          const current = prev.sharedWith || [];
+          const updated = current.includes(userId)
+              ? current.filter(id => id !== userId)
+              : [...current, userId];
+          return { ...prev, sharedWith: updated };
+      });
   };
 
   const rootUsers = users.filter(u => !u.managerId);
@@ -450,6 +469,84 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
                             ))}
                         </select>
                     </div>
+
+                    {/* Additional Access (sharedWith) */}
+                    <div className="md:col-span-2 mt-2">
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                            <UserCheck className="w-3.5 h-3.5" />
+                            Accès supplémentaire — Personnes pouvant voir et éditer toute l'équipe
+                        </label>
+                        {/* Selected users badges */}
+                        {teamForm.sharedWith.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                {teamForm.sharedWith.map(uid => {
+                                    const u = users.find(x => x.id === uid);
+                                    if (!u) return null;
+                                    return (
+                                        <span key={uid} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 text-xs font-medium rounded-full border border-blue-200 dark:border-blue-700">
+                                            {u.firstName} {u.lastName}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleTeamSharedUser(uid)}
+                                                className="ml-0.5 hover:text-red-500 transition-colors"
+                                                title="Retirer l'accès"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        {/* User search + list */}
+                        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                            <div className="relative border-b border-slate-200 dark:border-slate-700">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                    value={teamSharedWithSearch}
+                                    onChange={e => setTeamSharedWithSearch(e.target.value)}
+                                    placeholder="Rechercher un utilisateur à ajouter..."
+                                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 text-sm outline-none text-slate-900 dark:text-white"
+                                />
+                            </div>
+                            <div className="max-h-40 overflow-y-auto bg-white dark:bg-slate-800">
+                                {users
+                                    .filter(u =>
+                                        u.id !== teamForm.managerId &&
+                                        (!teamSharedWithSearch ||
+                                            `${u.firstName} ${u.lastName} ${u.uid}`.toLowerCase().includes(teamSharedWithSearch.toLowerCase()))
+                                    )
+                                    .sort((a, b) => a.lastName.localeCompare(b.lastName))
+                                    .map(u => {
+                                        const selected = teamForm.sharedWith.includes(u.id);
+                                        return (
+                                            <button
+                                                key={u.id}
+                                                type="button"
+                                                onClick={() => handleToggleTeamSharedUser(u.id)}
+                                                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 ${selected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                                            >
+                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${selected ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                                                    {selected ? <UserCheck className="w-3.5 h-3.5" /> : `${u.firstName[0]}${u.lastName[0]}`}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <span className="font-medium text-slate-900 dark:text-white">{u.firstName} {u.lastName}</span>
+                                                    <span className="text-slate-400 ml-2 text-xs">{u.functionTitle}</span>
+                                                </div>
+                                                <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : u.role === UserRole.MANAGER ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                                                    {u.role}
+                                                </span>
+                                            </button>
+                                        );
+                                    })
+                                }
+                                {users.filter(u => u.id !== teamForm.managerId && (!teamSharedWithSearch || `${u.firstName} ${u.lastName} ${u.uid}`.toLowerCase().includes(teamSharedWithSearch.toLowerCase()))).length === 0 && (
+                                    <p className="text-center text-slate-400 text-sm py-4">Aucun utilisateur trouvé</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     <button
                         onClick={handleSaveTeam}
                         className="bg-indigo-600 hover:bg-indigo-700 text-white p-2.5 rounded-lg font-medium transition-colors flex items-center justify-center shadow-md md:col-span-2 mt-2"
@@ -504,20 +601,41 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
                                       <p className="text-xs text-slate-500 dark:text-slate-400">{team.projects.length} Projects</p>
                                   </div>
                               </div>
-                              <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-                                  <p className="text-xs text-slate-400 uppercase font-semibold mb-1">Managed By</p>
-                                  <div className="flex items-center">
-                                        {manager ? (
-                                            <>
-                                                <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-300 mr-2">
-                                                    {manager.firstName[0]}{manager.lastName[0]}
-                                                </div>
-                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{manager.firstName} {manager.lastName}</span>
-                                            </>
-                                        ) : (
-                                            <span className="text-sm text-red-500 italic">No Manager Assigned</span>
-                                        )}
+                              <div className="pt-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
+                                  <div>
+                                      <p className="text-xs text-slate-400 uppercase font-semibold mb-1">Managed By</p>
+                                      <div className="flex items-center">
+                                            {manager ? (
+                                                <>
+                                                    <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-300 mr-2">
+                                                        {manager.firstName[0]}{manager.lastName[0]}
+                                                    </div>
+                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{manager.firstName} {manager.lastName}</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-sm text-red-500 italic">No Manager Assigned</span>
+                                            )}
+                                      </div>
                                   </div>
+                                  {/* Shared access users */}
+                                  {(team.sharedWith || []).length > 0 && (
+                                      <div>
+                                          <p className="text-xs text-slate-400 uppercase font-semibold mb-1.5 flex items-center gap-1">
+                                              <UserCheck className="w-3 h-3" /> Accès supplémentaire
+                                          </p>
+                                          <div className="flex flex-wrap gap-1.5">
+                                              {(team.sharedWith || []).map(uid => {
+                                                  const u = users.find(x => x.id === uid);
+                                                  if (!u) return null;
+                                                  return (
+                                                      <span key={uid} className="inline-flex items-center px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-medium rounded-full border border-blue-200 dark:border-blue-800">
+                                                          {u.firstName} {u.lastName}
+                                                      </span>
+                                                  );
+                                              })}
+                                          </div>
+                                      </div>
+                                  )}
                               </div>
                           </div>
                       )

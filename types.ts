@@ -161,6 +161,7 @@ export interface Team {
   name: string;
   managerId: string;
   projects: Project[];
+  sharedWith?: string[]; // IDs des utilisateurs ayant accès en lecture/édition à toute l'équipe (configurable par l'admin)
 }
 
 export interface Meeting {
