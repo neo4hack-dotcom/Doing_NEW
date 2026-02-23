@@ -617,7 +617,30 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                     <WifiOff className="w-5 h-5 text-indigo-500" />
                     Local AI Configuration
                 </h3>
-                
+
+                {/* Non-admin: read-only view of the current config */}
+                {appState?.currentUser?.role !== UserRole.ADMIN ? (
+                    <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-100 dark:border-slate-700/50 space-y-3">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-slate-400" />
+                            La configuration IA est définie par l'administrateur et s'applique à tous les utilisateurs.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                            <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                                <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Provider</p>
+                                <p className="text-sm font-semibold text-slate-800 dark:text-white capitalize">{config.provider}</p>
+                            </div>
+                            <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                                <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Modèle</p>
+                                <p className="text-sm font-semibold text-slate-800 dark:text-white">{config.model || '—'}</p>
+                            </div>
+                            <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                                <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Endpoint</p>
+                                <p className="text-xs font-mono text-slate-600 dark:text-slate-300 truncate">{config.baseUrl || '—'}</p>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
                 <div className="space-y-6">
                 {/* Provider Selection */}
                 <div>
@@ -631,8 +654,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                         key={provider.id}
                         onClick={() => setLocalConfig({ ...localConfig, provider: provider.id as LLMProvider })}
                         className={`flex items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all font-medium text-sm
-                            ${localConfig.provider === provider.id 
-                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300' 
+                            ${localConfig.provider === provider.id
+                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300'
                             : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-400'}
                         `}
                         >
@@ -653,14 +676,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                         <div className="flex gap-2">
                             <div className="relative flex-1">
                                 <Link className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     value={localConfig.baseUrl || 'http://localhost:11434'}
                                     onChange={e => setLocalConfig({...localConfig, baseUrl: e.target.value})}
                                     className="w-full p-3 pl-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                                 />
                             </div>
-                            <button 
+                            <button
                                 onClick={handleRefreshOllama}
                                 disabled={loadingModels}
                                 className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg transition-colors flex items-center"
@@ -674,7 +697,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                         <div>
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Model</label>
                         {ollamaModels.length > 0 ? (
-                            <select 
+                            <select
                                 value={localConfig.model}
                                 onChange={e => setLocalConfig({...localConfig, model: e.target.value})}
                                 className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
@@ -682,12 +705,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                                 {ollamaModels.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
                         ) : (
-                            <input 
+                            <input
                                 type="text"
                                 value={localConfig.model}
                                 onChange={e => setLocalConfig({...localConfig, model: e.target.value})}
                                 className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                                placeholder="Model name (e.g., llama3)" 
+                                placeholder="Model name (e.g., llama3)"
                             />
                         )}
                         </div>
@@ -698,8 +721,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                     <div className="space-y-4 animate-in fade-in">
                         <div>
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Endpoint URL</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             value={localConfig.baseUrl || ''}
                             onChange={e => setLocalConfig({...localConfig, baseUrl: e.target.value})}
                             className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
@@ -708,20 +731,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                         </div>
                         <div>
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Model Name (Optional)</label>
-                        <input 
+                        <input
                             type="text"
                             value={localConfig.model || ''}
                             onChange={e => setLocalConfig({...localConfig, model: e.target.value})}
                             className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            placeholder="e.g. gpt-4-turbo, local-model..." 
+                            placeholder="e.g. gpt-4-turbo, local-model..."
                         />
                         </div>
                         <div>
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1">API Key (Optional)</label>
                         <div className="relative">
                             <Key className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                            <input 
-                                type="password" 
+                            <input
+                                type="password"
                                 value={localConfig.apiKey || ''}
                                 onChange={e => setLocalConfig({...localConfig, apiKey: e.target.value})}
                                 className="w-full p-3 pl-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
@@ -736,8 +759,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                     <div className="space-y-4 animate-in fade-in">
                         <div>
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Webhook URL</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             value={localConfig.baseUrl || ''}
                             onChange={e => setLocalConfig({...localConfig, baseUrl: e.target.value})}
                             className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
@@ -749,8 +772,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Auth Token (Header Authorization)</label>
                         <div className="relative">
                             <Key className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                            <input 
-                                type="password" 
+                            <input
+                                type="password"
                                 value={localConfig.apiKey || ''}
                                 onChange={e => setLocalConfig({...localConfig, apiKey: e.target.value})}
                                 className="w-full p-3 pl-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
@@ -767,7 +790,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                             {testStatus === 'success' && <span className="text-green-600 dark:text-green-400 flex items-center text-sm font-bold"><CheckCircle2 className="w-4 h-4 mr-1"/> Connected</span>}
                             {testStatus === 'error' && <span className="text-red-600 dark:text-red-400 flex items-center text-sm font-bold"><XCircle className="w-4 h-4 mr-1"/> Connection Failed</span>}
                         </div>
-                        <button 
+                        <button
                             onClick={handleTestConnection}
                             disabled={testStatus === 'testing' || !localConfig.baseUrl}
                             className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors flex items-center"
@@ -778,13 +801,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                     </div>
 
                 </div>
-                
+
                  <div className="flex justify-end pt-4">
-                    <button 
+                    <button
                         onClick={handleSave}
                         className={`flex items-center px-6 py-3 rounded-xl font-bold shadow-lg transition-all transform active:scale-95
-                            ${saveStatus === 'saved' 
-                                ? 'bg-green-500 hover:bg-green-600 text-white' 
+                            ${saveStatus === 'saved'
+                                ? 'bg-green-500 hover:bg-green-600 text-white'
                                 : 'bg-indigo-600 hover:bg-indigo-700 text-white'}
                         `}
                     >
@@ -793,6 +816,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, appState, onSave,
                     </button>
                  </div>
                 </div>
+                )}
             </div>
             </>
         )}

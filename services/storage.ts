@@ -11,6 +11,7 @@ const CURRENT_APP_VERSION = '1.0.2';
 
 // URL relative pour fonctionner indépendamment du domaine ou de l'IP du serveur
 const API_URL = '/api/data';
+const LLM_CONFIG_URL = '/api/config/llm';
 
 // Configuration par défaut du modèle LLM (Ollama local)
 const DEFAULT_LLM_CONFIG: LLMConfig = {
@@ -268,3 +269,35 @@ export const clearState = () => {
     localStorage.setItem(VERSION_KEY, CURRENT_APP_VERSION);
     window.location.reload();
 }
+
+// --- CONFIGURATION LLM CENTRALISÉE (ADMIN) ---
+// Récupère la configuration LLM définie par l'admin depuis le serveur
+export const fetchLLMConfigFromServer = async (): Promise<LLMConfig | null> => {
+    try {
+        const response = await fetch(LLM_CONFIG_URL);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.provider) {
+                return data as LLMConfig;
+            }
+        }
+    } catch (e) {
+        console.warn("Impossible de récupérer la config LLM du serveur.");
+    }
+    return null;
+};
+
+// Sauvegarde la configuration LLM de l'admin sur le serveur (admin uniquement)
+export const saveLLMConfigToServer = async (config: LLMConfig): Promise<boolean> => {
+    try {
+        const response = await fetch(LLM_CONFIG_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        return response.ok;
+    } catch (e) {
+        console.error("Impossible de sauvegarder la config LLM sur le serveur.", e);
+        return false;
+    }
+};
