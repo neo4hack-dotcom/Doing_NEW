@@ -122,51 +122,7 @@ def save_data():
         return jsonify({"error": "Erreur sauvegarde données"}), 500
 
 # --- ENDPOINTS DE CONFIGURATION ---
-# Permettent de modifier le chemin de la base de données et la configuration LLM
-
-DEFAULT_LLM_CONFIG = {
-    "provider": "ollama",
-    "baseUrl": "http://localhost:11434",
-    "model": "llama3"
-}
-
-def get_server_config():
-    """Charge le fichier server-config.json et retourne son contenu."""
-    try:
-        if os.path.exists(SERVER_CONFIG_FILE):
-            with open(SERVER_CONFIG_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"Error reading server config: {e}")
-    return {}
-
-def save_server_config(config: dict):
-    """Sauvegarde le dictionnaire dans server-config.json."""
-    with open(SERVER_CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2)
-
-@app.route('/api/config/llm', methods=['GET'])
-def get_llm_config():
-    """Retourne la configuration LLM définie par l'administrateur."""
-    config = get_server_config()
-    llm_config = config.get('llmConfig', DEFAULT_LLM_CONFIG)
-    return jsonify(llm_config)
-
-@app.route('/api/config/llm', methods=['POST'])
-def save_llm_config():
-    """Sauvegarde la configuration LLM de l'administrateur dans server-config.json."""
-    new_llm_config = request.json
-    if not new_llm_config or 'provider' not in new_llm_config:
-        return jsonify({"error": "Invalid LLM config"}), 400
-    try:
-        config = get_server_config()
-        config['llmConfig'] = new_llm_config
-        save_server_config(config)
-        print(f"[Config] Configuration LLM mise à jour : provider={new_llm_config.get('provider')}, model={new_llm_config.get('model')}")
-        return jsonify({"success": True})
-    except Exception as e:
-        print(f"Erreur lors de la sauvegarde de la config LLM: {e}")
-        return jsonify({"error": "Échec de la sauvegarde de la config LLM"}), 500
+# Permettent de modifier le chemin de la base de données
 
 @app.route('/api/config/db-path', methods=['GET'])
 def get_db_config_path():
@@ -182,10 +138,9 @@ def update_db_config_path():
         return jsonify({"error": "Path required"}), 400
 
     try:
-        # Sauvegarde la nouvelle configuration (préserve les autres clés comme llmConfig)
-        config = get_server_config()
-        config['dbPath'] = new_path
-        save_server_config(config)
+        # Sauvegarde la nouvelle configuration
+        with open(SERVER_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump({"dbPath": new_path}, f, indent=2)
 
         DB_FILE = new_path
 

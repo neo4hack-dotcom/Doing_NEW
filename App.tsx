@@ -19,7 +19,7 @@ import SmartTodoManager from './components/SmartTodoManager';
 import KanbanView from './components/KanbanView';
 import OneOffQueryManager from './components/OneOffQueryManager';
 
-import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer, generateId, sanitizeAppState, fetchLLMConfigFromServer, saveLLMConfigToServer } from './services/storage';
+import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer, generateId, sanitizeAppState } from './services/storage';
 import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage, AppNotification, SmartTodo, OneOffQuery } from './types';
 import { Bell, Sun, Moon, Bot, RefreshCw, Cloud, CloudOff } from 'lucide-react';
 
@@ -319,19 +319,14 @@ const AppContent: React.FC = () => {
 
     const initServerSync = async () => {
         try {
-            const [serverData, serverLLMConfig] = await Promise.all([
-                fetchFromServer(),
-                fetchLLMConfigFromServer()
-            ]);
+            const serverData = await fetchFromServer();
             if (serverData) {
-                // Always prefer server data on startup to avoid desynchronization.
-                // The LLM config is always taken from the dedicated server endpoint (admin-defined),
-                // falling back to server db.json config, then local config.
+                // Always prefer server data on startup to avoid desynchronization
                 const mergedState = {
                     ...serverData,
                     currentUser: localData.currentUser,
                     theme: localData.theme,
-                    llmConfig: serverLLMConfig || serverData.llmConfig || localData.llmConfig
+                    llmConfig: localData.llmConfig || serverData.llmConfig
                 };
                 setAppState(mergedState);
                 localStorage.setItem('teamsync_data_v15', JSON.stringify(mergedState));
@@ -346,19 +341,13 @@ const AppContent: React.FC = () => {
     initServerSync();
 
     const intervalId = setInterval(async () => {
-        const [serverData, serverLLMConfig] = await Promise.all([
-            fetchFromServer(),
-            fetchLLMConfigFromServer()
-        ]);
+        const serverData = await fetchFromServer();
         if (serverData) {
             setIsOnline(true);
             setLastSyncTime(new Date());
 
             setAppState(currentState => {
                 if (!currentState) return serverData;
-
-                // Always use the admin-defined LLM config from the server
-                const resolvedLLMConfig = serverLLMConfig || serverData.llmConfig || currentState.llmConfig;
 
                 if ((serverData.lastUpdated || 0) > (currentState.lastUpdated || 0)) {
                     setShowSyncToast(true);
@@ -368,20 +357,12 @@ const AppContent: React.FC = () => {
                         ...serverData,
                         currentUser: currentState.currentUser,
                         theme: currentState.theme,
-                        llmConfig: resolvedLLMConfig
+                        llmConfig: currentState.llmConfig
                     };
 
                     localStorage.setItem('teamsync_data_v15', JSON.stringify(mergedState));
                     return mergedState;
                 }
-
-                // Even if data hasn't changed, update LLM config if it differs
-                if (serverLLMConfig && JSON.stringify(serverLLMConfig) !== JSON.stringify(currentState.llmConfig)) {
-                    const updatedState = { ...currentState, llmConfig: serverLLMConfig };
-                    localStorage.setItem('teamsync_data_v15', JSON.stringify(updatedState));
-                    return updatedState;
-                }
-
                 return currentState;
             });
         } else {
@@ -399,18 +380,16 @@ const AppContent: React.FC = () => {
         const detail = (e as CustomEvent).detail;
         if (detail?.serverData) {
             const serverData = sanitizeAppState(detail.serverData);
-            fetchLLMConfigFromServer().then(serverLLMConfig => {
-                setAppState(currentState => {
-                    if (!currentState) return serverData;
-                    const mergedState = {
-                        ...serverData,
-                        currentUser: currentState.currentUser,
-                        theme: currentState.theme,
-                        llmConfig: serverLLMConfig || serverData.llmConfig || currentState.llmConfig
-                    };
-                    localStorage.setItem('teamsync_data_v15', JSON.stringify(mergedState));
-                    return mergedState;
-                });
+            setAppState(currentState => {
+                if (!currentState) return serverData;
+                const mergedState = {
+                    ...serverData,
+                    currentUser: currentState.currentUser,
+                    theme: currentState.theme,
+                    llmConfig: currentState.llmConfig
+                };
+                localStorage.setItem('teamsync_data_v15', JSON.stringify(mergedState));
+                return mergedState;
             });
             setShowSyncToast(true);
             setTimeout(() => setShowSyncToast(false), 4000);
@@ -487,10 +466,7 @@ const AppContent: React.FC = () => {
   const handleLogin = async (user: User) => {
       setIsInitialLoading(true);
       try {
-          const [serverData, serverLLMConfig] = await Promise.all([
-              fetchFromServer(),
-              fetchLLMConfigFromServer()
-          ]);
+          const serverData = await fetchFromServer();
           setAppState(currentState => {
               const baseData = serverData || currentState;
               if (!baseData) return null;
@@ -499,8 +475,7 @@ const AppContent: React.FC = () => {
                   ...baseData,
                   currentUser: user,
                   theme: currentState?.theme || 'light',
-                  // Always use admin's server LLM config on login
-                  llmConfig: serverLLMConfig || baseData.llmConfig,
+                  llmConfig: currentState?.llmConfig || baseData.llmConfig,
                   lastUpdated: Date.now()
               };
               localStorage.setItem('teamsync_data_v15', JSON.stringify(newState));
@@ -828,13 +803,6 @@ const AppContent: React.FC = () => {
   const handleUpdateLLMConfig = (config: LLMConfig, prompts?: Record<string, string>) => {
       const newState = updateAppState(curr => ({...curr, llmConfig: config, prompts: prompts || curr.prompts}));
       setAppState(newState);
-      // Persist the admin's LLM config to the dedicated server endpoint
-      // so all users will receive it on their next load/sync
-      if (appState?.currentUser?.role === UserRole.ADMIN) {
-          saveLLMConfigToServer(config).catch(err =>
-              console.error("Échec de la sauvegarde de la config LLM sur le serveur:", err)
-          );
-      }
   };
 
   const handleUpdateUserPassword = (userId: string, newPass: string) => {
