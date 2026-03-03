@@ -3,7 +3,8 @@
 export enum UserRole {
   ADMIN = 'Admin',
   MANAGER = 'Manager',
-  EMPLOYEE = 'Employee'
+  EMPLOYEE = 'Employee',
+  EXTERNAL_PM = 'External PM'
 }
 
 // --- ÉTATS DES TÂCHES ---
@@ -339,6 +340,85 @@ export interface OneOffQuery {
   updatedAt: string;
 }
 
+// --- PM REPORT TYPES ---
+// Data structure for External PM project reports
+
+export type RAGStatus = 'Red' | 'Amber' | 'Green';
+
+export interface PMReportIncident {
+  id: string;
+  date: string;
+  title: string;
+  description: string;
+  severity: 'Critical' | 'Major' | 'Minor';
+  status: 'Open' | 'Investigating' | 'Resolved';
+}
+
+export interface PMReportUpdate {
+  id: string;
+  date: string;
+  category: 'Scope' | 'Timeline' | 'Budget' | 'Resource' | 'Technical' | 'Risk' | 'Other';
+  title: string;
+  description: string;
+  impact: RAGStatus;
+}
+
+export interface PMReportNews {
+  id: string;
+  date: string;
+  title: string;
+  description: string;
+  type: 'Achievement' | 'Announcement' | 'Change' | 'Info';
+}
+
+export interface PMReportMilestone {
+  id: string;
+  name: string;
+  plannedDate: string;
+  revisedDate?: string;
+  status: RAGStatus;
+  completionPct: number;
+}
+
+export interface PMReportRisk {
+  id: string;
+  description: string;
+  likelihood: 'Low' | 'Medium' | 'High';
+  impact: 'Low' | 'Medium' | 'High';
+  mitigation: string;
+  owner: string;
+}
+
+export interface PMReportData {
+  id: string;
+  projectId: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+  // Overall RAG status
+  overallStatus: RAGStatus;
+  scopeStatus: RAGStatus;
+  scheduleStatus: RAGStatus;
+  budgetStatus: RAGStatus;
+  resourceStatus: RAGStatus;
+  // Summary
+  executiveSummary: string;
+  keyDecisions: string;
+  nextSteps: string;
+  // Detailed sections
+  incidents: PMReportIncident[];
+  updates: PMReportUpdate[];
+  news: PMReportNews[];
+  milestones: PMReportMilestone[];
+  risks: PMReportRisk[];
+  // Budget info
+  budgetAllocated?: number;
+  budgetSpent?: number;
+  budgetForecast?: number;
+  // Completion
+  overallCompletionPct: number;
+}
+
 // --- CONFIGURATION SYSTÈME ---
 // Message système affiché globalement dans l'application
 export interface SystemMessage {
@@ -357,6 +437,7 @@ export interface AppState {
   workingGroups: WorkingGroup[]; // Groupes de travail avec sessions
   smartTodos: SmartTodo[]; // Tâches personnelles intelligentes
   oneOffQueries: OneOffQuery[]; // Demandes ponctuelles (One off queries)
+  pmReportData: PMReportData[]; // PM Report data entries
   notifications: AppNotification[]; // Notifications système
   dismissedAlerts: { [key: string]: string }; // Alertes rejetées (clé -> date ISO), stocké localement par utilisateur
   systemMessage?: SystemMessage; // Message système global

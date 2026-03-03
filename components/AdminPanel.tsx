@@ -47,8 +47,9 @@ const HierarchyNode: React.FC<{ user: User; allUsers: User[]; level?: number }> 
         </div>
 
         <div className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide rounded-full border
-            ${user.role === UserRole.ADMIN ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800' : 
+            ${user.role === UserRole.ADMIN ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800' :
               user.role === UserRole.MANAGER ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' :
+              user.role === UserRole.EXTERNAL_PM ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800' :
               'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600'}
         `}>
           {user.role}
@@ -214,7 +215,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
   };
 
   const rootUsers = users.filter(u => !u.managerId);
-  const potentialManagers = users.filter(u => u.role === UserRole.MANAGER || u.role === UserRole.ADMIN);
+  const potentialManagers = users.filter(u => u.role === UserRole.MANAGER || u.role === UserRole.ADMIN || u.role === UserRole.EXTERNAL_PM);
 
   // Sorted + filtered directory
   const sortedFilteredUsers = useMemo(() => {
@@ -533,7 +534,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, teams, onAddUser, onUpda
                                                     <span className="font-medium text-slate-900 dark:text-white">{u.firstName} {u.lastName}</span>
                                                     <span className="text-slate-400 ml-2 text-xs">{u.functionTitle}</span>
                                                 </div>
-                                                <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : u.role === UserRole.MANAGER ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                                                <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : u.role === UserRole.MANAGER ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : u.role === UserRole.EXTERNAL_PM ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
                                                     {u.role}
                                                 </span>
                                             </button>

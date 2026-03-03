@@ -18,9 +18,10 @@ import WorkingGroupModule from './components/WorkingGroup';
 import SmartTodoManager from './components/SmartTodoManager';
 import KanbanView from './components/KanbanView';
 import OneOffQueryManager from './components/OneOffQueryManager';
+import PMReport from './components/PMReport';
 
 import { loadState, saveState, subscribeToStoreUpdates, updateAppState, fetchFromServer, generateId, sanitizeAppState } from './services/storage';
-import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage, AppNotification, SmartTodo, OneOffQuery } from './types';
+import { AppState, User, Team, UserRole, Meeting, LLMConfig, WeeklyReport as WeeklyReportType, WorkingGroup, SystemMessage, AppNotification, SmartTodo, OneOffQuery, PMReportData } from './types';
 import { Bell, Sun, Moon, Bot, RefreshCw, Cloud, CloudOff } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -800,6 +801,18 @@ const AppContent: React.FC = () => {
     oneOffQueries: (curr.oneOffQueries || []).filter(q => q.id !== id)
   }));
 
+  const handleSavePMReport = createHandler((curr, data: PMReportData) => {
+    const reports = curr.pmReportData || [];
+    const idx = reports.findIndex(r => r.id === data.id);
+    const next = [...reports];
+    if (idx >= 0) next[idx] = data; else next.push(data);
+    return { ...curr, pmReportData: next };
+  });
+  const handleDeletePMReport = createHandler((curr, id: string) => ({
+    ...curr,
+    pmReportData: (curr.pmReportData || []).filter(r => r.id !== id)
+  }));
+
   const handleUpdateLLMConfig = (config: LLMConfig, prompts?: Record<string, string>) => {
       const newState = updateAppState(curr => ({...curr, llmConfig: config, prompts: prompts || curr.prompts}));
       setAppState(newState);
@@ -987,6 +1000,7 @@ const AppContent: React.FC = () => {
             {activeTab === 'meetings' && <MeetingManager meetings={viewState.meetings} teams={viewState.teams} users={viewState.users} llmConfig={appState.llmConfig} onUpdateMeeting={handleUpdateMeeting} onDeleteMeeting={handleDeleteMeeting} />}
             {activeTab === 'smart-todo' && appState.currentUser && <SmartTodoManager todos={viewState.smartTodos || []} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onSaveTodo={handleSaveTodo} onDeleteTodo={handleDeleteTodo} users={appState.users} onAddNotification={addNotification} />}
             {activeTab === 'one-off-queries' && appState.currentUser && <OneOffQueryManager queries={appState.oneOffQueries || []} teams={viewState.teams} users={appState.users} currentUser={appState.currentUser} llmConfig={appState.llmConfig} onSaveQuery={handleSaveOneOffQuery} onDeleteQuery={handleDeleteOneOffQuery} />}
+            {activeTab === 'pm-report' && appState.currentUser && <PMReport teams={viewState.teams} users={viewState.users} currentUser={appState.currentUser} llmConfig={appState.llmConfig} pmReportData={appState.pmReportData || []} onSavePMReport={handleSavePMReport} onDeletePMReport={handleDeletePMReport} />}
             {activeTab === 'admin-users' && <AdminPanel users={appState.users} teams={appState.teams} onAddUser={handleAddUser} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onAddTeam={handleAddTeam} onUpdateTeam={handleUpdateTeam} onDeleteTeam={handleDeleteTeam} />}
             {activeTab === 'settings' && <SettingsPanel config={appState.llmConfig} appState={appState} onSave={handleUpdateLLMConfig} onImport={handleImportState} onUpdateUserPassword={handleUpdateUserPassword} onUpdateSystemMessage={handleUpdateSystemMessage} />}
         </div>
