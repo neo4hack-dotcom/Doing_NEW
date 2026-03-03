@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Briefcase, Settings, BarChart3, LogOut, BookOpen, Layers, Library, ClipboardList, LayoutDashboard, Users, CheckSquare, LayoutGrid, Zap } from 'lucide-react';
+import { Briefcase, Settings, BarChart3, LogOut, BookOpen, Layers, Library, ClipboardList, LayoutDashboard, Users, CheckSquare, LayoutGrid, Zap, FileBarChart } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface SidebarProps {
@@ -12,6 +12,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, onTabChange, onLogout }) => {
   const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const isExternalPM = currentUser?.role === UserRole.EXTERNAL_PM;
   const showManagement = isAdmin;
 
   const navItemClass = (tab: string) => `
@@ -78,14 +79,23 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, onTabChange, 
           Smart To Do
         </button>
 
-        <button onClick={() => onTabChange('one-off-queries')} className={navItemClass('one-off-queries')}>
-          <Zap className="w-4 h-4 mr-3" />
-          One Off Queries
-        </button>
+        {!isExternalPM && (
+          <button onClick={() => onTabChange('one-off-queries')} className={navItemClass('one-off-queries')}>
+            <Zap className="w-4 h-4 mr-3" />
+            One Off Queries
+          </button>
+        )}
 
-        <button onClick={() => onTabChange('weekly-report')} className={navItemClass('weekly-report')}>
-          <ClipboardList className="w-4 h-4 mr-3" />
-          Weekly Report
+        {!isExternalPM && (
+          <button onClick={() => onTabChange('weekly-report')} className={navItemClass('weekly-report')}>
+            <ClipboardList className="w-4 h-4 mr-3" />
+            Weekly Report
+          </button>
+        )}
+
+        <button onClick={() => onTabChange('pm-report')} className={navItemClass('pm-report')}>
+          <FileBarChart className="w-4 h-4 mr-3" />
+          PM Report
         </button>
 
         {/* Sub-category: Tools */}
