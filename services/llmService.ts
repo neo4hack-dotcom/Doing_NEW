@@ -1555,6 +1555,30 @@ Required JSON structure:
     }
 };
 
+// Generates raw HTML for PM Report — bypasses cleanLLMOutput to preserve HTML tags
+export const generatePMReportHTML = async (prompt: string, config: LLMConfig): Promise<string> => {
+    try {
+        let result = "";
+        switch (config.provider) {
+          case 'ollama':
+            result = await callOllama(prompt, config);
+            break;
+          case 'local_http':
+            result = await callLocalHttp(prompt, config);
+            break;
+          case 'n8n':
+            result = await callN8n(prompt, config);
+            break;
+          default:
+            throw new Error(`Provider ${config.provider} not supported`);
+        }
+        // Only strip <think> blocks, preserve all other HTML
+        return result.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    } catch (error: any) {
+        throw new Error(`PM Report generation failed (${config.provider}): ${error.message}`);
+    }
+};
+
 export const fetchOllamaModels = async (baseUrl: string): Promise<string[]> => {
   try {
     const url = baseUrl || 'http://localhost:11434';

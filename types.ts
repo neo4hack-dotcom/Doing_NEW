@@ -395,6 +395,9 @@ export interface PMReportData {
   userId: string;
   createdAt: string;
   updatedAt: string;
+  // Versioning
+  version: number;
+  versionLabel: string;
   // Overall RAG status
   overallStatus: RAGStatus;
   scopeStatus: RAGStatus;
